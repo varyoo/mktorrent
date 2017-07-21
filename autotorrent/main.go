@@ -15,7 +15,7 @@ import (
 const (
 	usage  string = `Usage: autotorrent [OPTIONS] PROFILE FILES...`
 	config        = `Configuration file:
-The TOML confiuration file is at ~/.config/autotorrent/config.toml.
+The TOML confiuration file is at ~/.config/autotorrent.toml.
 A configuration file is a collection of profiles.
 The following is one profile:
 
@@ -49,10 +49,13 @@ func try() error {
 	tk := paths[0]
 	paths = paths[1:]
 
-	viper.SetConfigName("config")
-	viper.AddConfigPath("$HOME/.config/autotorrent/")
+	viper.SetConfigName("autotorrent")
+	viper.AddConfigPath("$HOME/.config/")
 	if err := viper.ReadInConfig(); err != nil {
 		return err
+	}
+	if !viper.InConfig(tk) {
+		return errors.New("profile not found")
 	}
 	ann := viper.GetStringSlice(fmt.Sprintf("%s.announce", tk))
 	source := viper.GetString(fmt.Sprintf("%s.source", tk))
