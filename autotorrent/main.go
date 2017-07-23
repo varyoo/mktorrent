@@ -15,7 +15,7 @@ import (
 const (
 	usage  string = `Usage: autotorrent [OPTIONS] PROFILE FILES...`
 	config        = `Configuration file:
-The TOML confiuration file is at ~/.config/autotorrent.toml.
+The TOML configuration file is at ~/.config/autotorrent.toml.
 A configuration file is a collection of profiles.
 The following is one profile:
 
