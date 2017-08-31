@@ -25,7 +25,7 @@ type (
 		PieceLength int    `bencode:"piece length"`
 		Pieces      string `bencode:"pieces"`
 		Source      string `bencode:"source,omitempty"`
-		Private     int
+		Private     int    `bencode:"private,omitempty"`
 		// Info in multi-file mode.
 		Files []File `bencode:"files"`
 	}
