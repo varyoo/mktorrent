@@ -31,13 +31,19 @@ func printHelp() {
 	fmt.Printf("\n%s\n", config)
 }
 
+var (
+	verbose bool
+	help    bool
+)
+
+func init() {
+	flag.BoolVar(&help, "h", false, "show this help screen")
+	flag.BoolVar(&verbose, "v", false, "be verbose")
+}
+
 func try() error {
-	var v bool
-	var h bool
-	flag.BoolVar(&h, "h", false, "show this help screen")
-	flag.BoolVar(&v, "v", false, "be verbose")
 	flag.Parse()
-	if h {
+	if help {
 		printHelp()
 		return nil
 	}
@@ -46,7 +52,7 @@ func try() error {
 		printHelp()
 		return errors.New("not enough arguments")
 	}
-	tk := paths[0]
+	profile := paths[0]
 	paths = paths[1:]
 
 	viper.SetConfigName("autotorrent")
@@ -54,12 +60,20 @@ func try() error {
 	if err := viper.ReadInConfig(); err != nil {
 		return err
 	}
-	if !viper.InConfig(tk) {
+	if !viper.InConfig(profile) {
 		return errors.New("profile not found")
 	}
-	ann := viper.GetStringSlice(fmt.Sprintf("%s.announce", tk))
-	source := viper.GetString(fmt.Sprintf("%s.source", tk))
-	private := viper.GetBool(fmt.Sprintf("%s.private", tk))
+	ann := viper.GetStringSlice(fmt.Sprintf("%s.announce", profile))
+	source := viper.GetString(fmt.Sprintf("%s.source", profile))
+	private := viper.GetBool(fmt.Sprintf("%s.private", profile))
+
+	if verbose {
+		fmt.Printf("Profile: %s\nAnnounce:", profile)
+		for _, a := range ann {
+			fmt.Printf(" %s", a)
+		}
+		fmt.Printf("\nSource: %s\nPrivate: %t\n", source, private)
+	}
 
 	for _, path := range paths {
 		if err := func() error {
