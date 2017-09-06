@@ -4,15 +4,24 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/varyoo/mktorrent/test"
 )
 
+func init() {
+	err := test.WriteFiles()
+	if err != nil {
+		panic(err)
+	}
+}
+
 func Test(t *testing.T) {
-	tor, err := MakeTorrent("./dir", 0, "yellow", true, "http://localhost/announce")
+	tor, err := MakeTorrent(test.Dir, 0, "yellow", true, "http://localhost/announce")
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	f, err := os.Create("dir.torrent")
+	f, err := os.Create("test.torrent")
 	if err != nil {
 		t.Fatal(err)
 		return
