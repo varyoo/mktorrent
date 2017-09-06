@@ -20,23 +20,26 @@ const (
 )
 
 type (
-	InfoDict struct {
-		Name        string `bencode:"name"`
+	Info struct {
 		PieceLength int    `bencode:"piece length"`
 		Pieces      string `bencode:"pieces"`
 		Source      string `bencode:"source,omitempty"`
 		Private     int    `bencode:"private,omitempty"`
-		// Info in multi-file mode.
+		Name        string `bencode:"name"`
+	}
+	InfoMulti struct {
+		Info
 		Files []File `bencode:"files"`
+	}
+	InfoSingle struct {
+		Info
+		Length int `bencode:"length"`
 	}
 	File struct {
 		Length int      `bencode:"length"`
 		Path   []string `bencode:"path"`
 	}
-	// Multi-file mode torrent definition
-	// https://wiki.theory.org/index.php/BitTorrentSpecification#Metainfo_File_Structure
 	Torrent struct {
-		Info         InfoDict   `bencode:"info"`
 		AnnounceList [][]string `bencode:"announce-list,omitempty"`
 		Announce     string     `bencode:"announce,omitempty"`
 		CreationDate int64      `bencode:"creation date,omitempty"`
@@ -44,12 +47,27 @@ type (
 		CreatedBy    string     `bencode:"created by,omitempty"`
 		UrlList      string     `bencode:"url-list,omitempty"`
 	}
+	TorrentMulti struct {
+		Torrent
+		Info InfoMulti `bencode:"info"`
+	}
+	TorrentSingle struct {
+		Torrent
+		Info InfoSingle `bencode:"info"`
+	}
 )
 
-func (t *Torrent) Save(w io.Writer) error {
+func (t *TorrentMulti) Save(w io.Writer) error {
 	return bencode.NewEncoder(w).Encode(t)
 }
-func (t *Torrent) Load(r io.Reader) error {
+func (t *TorrentMulti) Load(r io.Reader) error {
+	return bencode.NewDecoder(r).Decode(t)
+}
+
+func (t *TorrentSingle) Save(w io.Writer) error {
+	return bencode.NewEncoder(w).Encode(t)
+}
+func (t *TorrentSingle) Load(r io.Reader) error {
 	return bencode.NewDecoder(r).Decode(t)
 }
 
@@ -68,14 +86,18 @@ func autoPieceLen(length int) (t int) {
 	return
 }
 
-func MakeTorrent(path string, pieceLen int, source string, private bool, ann ...string) (*Torrent, error) {
-	t := &Torrent{
-		AnnounceList: make([][]string, 0),
-		CreationDate: time.Now().Unix(),
-		CreatedBy:    "varyoo",
-		Info: InfoDict{
-			Name:   filepath.Base(path),
-			Source: source,
+func MakeTorrent(path string, pieceLen int, source string, private bool, ann ...string) (*TorrentMulti, error) {
+	t := &TorrentMulti{
+		Torrent: Torrent{
+			AnnounceList: make([][]string, 0),
+			CreationDate: time.Now().Unix(),
+			CreatedBy:    "varyoo",
+		},
+		Info: InfoMulti{
+			Info: Info{
+				Source: source,
+				Name:   filepath.Base(path),
+			},
 		},
 	}
 	if private {

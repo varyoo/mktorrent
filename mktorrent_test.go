@@ -22,7 +22,7 @@ func Test(t *testing.T) {
 		return
 	}
 	f.Seek(0, 0)
-	have := &Torrent{}
+	have := &TorrentMulti{}
 	if err := have.Load(f); err != nil {
 		t.Fatal(err)
 		return
