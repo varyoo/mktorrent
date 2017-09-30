@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -41,6 +42,10 @@ func init() {
 	flag.BoolVar(&verbose, "v", false, "be verbose")
 }
 
+type tor interface {
+	Save(io.Writer) error
+}
+
 func try() error {
 	flag.Parse()
 	if help {
@@ -77,15 +82,37 @@ func try() error {
 
 	for _, path := range paths {
 		if err := func() error {
-			t, err := mktorrent.MakeTorrent(path, 0, source, private, ann...)
+			info, err := os.Stat(path)
+			if err != nil {
+				return errors.Wrap(err, "is it a dir or is it a file?")
+			}
+
+			var t tor
+			var mode string
+			if info.IsDir() {
+				mode = "multiple files torrent"
+				var m mktorrent.TorrentMulti
+				m, err = mktorrent.MakeMultiTorrent(path, 0, source, private, ann...)
+				t = &m
+			} else {
+				mode = "single file torrent"
+				var s mktorrent.TorrentSingle
+				s, err = mktorrent.MakeSingleTorrent(path, 0, source, private, ann...)
+				t = &s
+			}
+			if verbose {
+				fmt.Printf("Mode: %s\n", mode)
+			}
 			if err != nil {
 				return errors.Wrap(err, "can't make torrent")
 			}
+
 			w, err := os.Create(fmt.Sprintf("%s.torrent", path))
 			if err != nil {
 				// clear enough
 				return err
 			}
+
 			return errors.Wrap(t.Save(w), "can't save torrent")
 		}(); err != nil {
 			return errors.Wrapf(err, "%s", path)

@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/hex"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -12,6 +13,21 @@ const (
 )
 
 var File = filepath.Join(Dir, file)
+var FilePieces, DirPieces string
+
+func init() {
+	b, err := hex.DecodeString("6c6d92c46205e60700c7545ff7977dae854af76e")
+	if err != nil {
+		panic(err)
+	}
+	FilePieces = string(b)
+
+	b, err = hex.DecodeString("2e4a5ac6ec3817ca4702a8ddc0f35133772eff35")
+	if err != nil {
+		panic(err)
+	}
+	DirPieces = string(b)
+}
 
 func WriteFiles() error {
 	err := os.MkdirAll(filepath.Join(Dir, "Subdirectory"), os.ModePerm)
