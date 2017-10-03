@@ -2,13 +2,14 @@ package mktorrent
 
 import (
 	"crypto/sha1"
-	"github.com/pkg/errors"
-	"github.com/zeebo/bencode"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/zeebo/bencode"
 )
 
 const (
