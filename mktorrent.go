@@ -89,9 +89,9 @@ func MakeMultiTorrent(path string, pieceLen int, source string, private bool, an
 	*TorrentMulti, error) {
 
 	t := TorrentMulti{
-		Torrent: mktorrent(ann),
+		Torrent: mkTorrent(ann),
 		Info: InfoMulti{
-			Info: mkinfo(source, path, private),
+			Info: mkInfo(source, path, private),
 		},
 	}
 
@@ -151,7 +151,7 @@ func MakeMultiTorrent(path string, pieceLen int, source string, private bool, an
 	return &t, nil
 }
 
-func mktorrent(ann []string) Torrent {
+func mkTorrent(ann []string) Torrent {
 	t := Torrent{
 		AnnounceList: make([][]string, 0),
 		CreationDate: time.Now().Unix(),
@@ -163,7 +163,7 @@ func mktorrent(ann []string) Torrent {
 	return t
 }
 
-func mkinfo(source, path string, private bool) Info {
+func mkInfo(source, path string, private bool) Info {
 	i := Info{
 		Source: source,
 		Name:   filepath.Base(path),
@@ -200,9 +200,9 @@ func MakeSingleTorrent(path string, pieceLen int, source string, private bool, a
 	*TorrentSingle, error) {
 
 	t := TorrentSingle{
-		Torrent: mktorrent(ann),
+		Torrent: mkTorrent(ann),
 		Info: InfoSingle{
-			Info: mkinfo(source, path, private),
+			Info: mkInfo(source, path, private),
 		},
 	}
 
