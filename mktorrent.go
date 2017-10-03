@@ -85,7 +85,9 @@ func autoPieceLen(length int) (t int) {
 	return
 }
 
-func MakeMultiTorrent(path string, pieceLen int, source string, private bool, ann ...string) (TorrentMulti, error) {
+func MakeMultiTorrent(path string, pieceLen int, source string, private bool, ann ...string) (
+	*TorrentMulti, error) {
+
 	t := TorrentMulti{
 		Torrent: mktorrent(ann),
 		Info: InfoMulti{
@@ -95,11 +97,11 @@ func MakeMultiTorrent(path string, pieceLen int, source string, private bool, an
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return t, err
+		return nil, err
 	}
 
 	if !info.IsDir() {
-		return t, errors.New("not a directory")
+		return nil, errors.New("not a directory")
 	}
 
 	// files
@@ -123,7 +125,7 @@ func MakeMultiTorrent(path string, pieceLen int, source string, private bool, an
 
 	err = filepath.Walk(path, walker)
 	if err != nil {
-		return t, errors.Wrap(err, "exploring")
+		return nil, errors.Wrap(err, "exploring")
 	}
 
 	// piece length
@@ -137,7 +139,7 @@ func MakeMultiTorrent(path string, pieceLen int, source string, private bool, an
 	for _, path := range paths {
 		f, err := os.Open(path)
 		if err != nil {
-			return t, err
+			return nil, err
 		}
 		readers = append(readers, f)
 	}
@@ -146,7 +148,7 @@ func MakeMultiTorrent(path string, pieceLen int, source string, private bool, an
 	pieces, err := hash(r, pieceLen)
 	t.Info.Pieces = pieces
 
-	return t, nil
+	return &t, nil
 }
 
 func mktorrent(ann []string) Torrent {
@@ -194,7 +196,9 @@ func hash(r io.Reader, pieceLen int) (string, error) {
 	return pieces, nil
 }
 
-func MakeSingleTorrent(path string, pieceLen int, source string, private bool, ann ...string) (TorrentSingle, error) {
+func MakeSingleTorrent(path string, pieceLen int, source string, private bool, ann ...string) (
+	*TorrentSingle, error) {
+
 	t := TorrentSingle{
 		Torrent: mktorrent(ann),
 		Info: InfoSingle{
@@ -204,12 +208,12 @@ func MakeSingleTorrent(path string, pieceLen int, source string, private bool, a
 
 	f, err := os.Open(path)
 	if err != nil {
-		return t, err
+		return nil, err
 	}
 
 	info, err := f.Stat()
 	if err != nil {
-		return t, err
+		return nil, err
 	}
 
 	length := int(info.Size())
@@ -219,12 +223,12 @@ func MakeSingleTorrent(path string, pieceLen int, source string, private bool, a
 
 	pieces, err := hash(f, pieceLen)
 	if err != nil {
-		return t, err
+		return nil, err
 	}
 
 	t.Info.Pieces = pieces
 	t.Info.PieceLength = pieceLen
 	t.Info.Length = length
 
-	return t, nil
+	return &t, nil
 }

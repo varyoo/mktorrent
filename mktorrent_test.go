@@ -45,12 +45,12 @@ func infoEqual(t *testing.T, a, b Info) {
 	}
 }
 
-func singleEqual(t *testing.T, a, b TorrentSingle) {
+func singleEqual(t *testing.T, a, b *TorrentSingle) {
 	infoEqual(t, a.Info.Info, b.Info.Info)
 	torrentEqual(t, a.Torrent, b.Torrent)
 }
 
-func multiEqual(t *testing.T, a, b TorrentMulti) {
+func multiEqual(t *testing.T, a, b *TorrentMulti) {
 	infoEqual(t, a.Info.Info, b.Info.Info)
 	torrentEqual(t, a.Torrent, b.Torrent)
 
@@ -72,7 +72,7 @@ func multiEqual(t *testing.T, a, b TorrentMulti) {
 }
 
 func TestSingle(t *testing.T) {
-	want := TorrentSingle{
+	want := &TorrentSingle{
 		Torrent: Torrent{
 			AnnounceList: [][]string{
 				{"http://localhost/announce"},
@@ -102,7 +102,7 @@ func TestSingle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	have = TorrentSingle{}
+	have = &TorrentSingle{}
 	err = have.Load(b)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +111,7 @@ func TestSingle(t *testing.T) {
 }
 
 func TestMulti(t *testing.T) {
-	want := TorrentMulti{
+	want := &TorrentMulti{
 		Torrent: Torrent{
 			AnnounceList: [][]string{
 				{"http://localhost/announce"},
@@ -145,7 +145,7 @@ func TestMulti(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	have = TorrentMulti{}
+	have = &TorrentMulti{}
 	err = have.Load(b)
 	if err != nil {
 		t.Fatal(err)

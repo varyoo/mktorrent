@@ -91,14 +91,10 @@ func try() error {
 			var mode string
 			if info.IsDir() {
 				mode = "multiple files torrent"
-				var m mktorrent.TorrentMulti
-				m, err = mktorrent.MakeMultiTorrent(path, 0, source, private, ann...)
-				t = &m
+				t, err = mktorrent.MakeMultiTorrent(path, 0, source, private, ann...)
 			} else {
 				mode = "single file torrent"
-				var s mktorrent.TorrentSingle
-				s, err = mktorrent.MakeSingleTorrent(path, 0, source, private, ann...)
-				t = &s
+				t, err = mktorrent.MakeSingleTorrent(path, 0, source, private, ann...)
 			}
 			if verbose {
 				fmt.Printf("Mode: %s\n", mode)
