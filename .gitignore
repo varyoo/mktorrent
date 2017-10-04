@@ -1,2 +1,4 @@
 Test files
-test.torrent
+*.torrent
+autotorrent.toml
+autotorrent/autotorrent

@@ -61,6 +61,7 @@ func try() error {
 	paths = paths[1:]
 
 	viper.SetConfigName("autotorrent")
+	viper.AddConfigPath(".") // useful for tests
 	viper.AddConfigPath("$HOME/.config/")
 	if err := viper.ReadInConfig(); err != nil {
 		return err
