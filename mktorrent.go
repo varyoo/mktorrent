@@ -2,14 +2,14 @@ package mktorrent
 
 import (
 	"crypto/sha1"
-	"fmt"
-	"github.com/pkg/errors"
-	"github.com/zeebo/bencode"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/zeebo/bencode"
 )
 
 const (
@@ -20,23 +20,26 @@ const (
 )
 
 type (
-	InfoDict struct {
-		Name        string `bencode:"name"`
+	Info struct {
 		PieceLength int    `bencode:"piece length"`
 		Pieces      string `bencode:"pieces"`
 		Source      string `bencode:"source,omitempty"`
 		Private     int    `bencode:"private,omitempty"`
-		// Info in multi-file mode.
+		Name        string `bencode:"name"`
+	}
+	InfoMulti struct {
+		Info
 		Files []File `bencode:"files"`
+	}
+	InfoSingle struct {
+		Info
+		Length int `bencode:"length"`
 	}
 	File struct {
 		Length int      `bencode:"length"`
 		Path   []string `bencode:"path"`
 	}
-	// Multi-file mode torrent definition
-	// https://wiki.theory.org/index.php/BitTorrentSpecification#Metainfo_File_Structure
 	Torrent struct {
-		Info         InfoDict   `bencode:"info"`
 		AnnounceList [][]string `bencode:"announce-list,omitempty"`
 		Announce     string     `bencode:"announce,omitempty"`
 		CreationDate int64      `bencode:"creation date,omitempty"`
@@ -44,12 +47,27 @@ type (
 		CreatedBy    string     `bencode:"created by,omitempty"`
 		UrlList      string     `bencode:"url-list,omitempty"`
 	}
+	TorrentMulti struct {
+		Torrent
+		Info InfoMulti `bencode:"info"`
+	}
+	TorrentSingle struct {
+		Torrent
+		Info InfoSingle `bencode:"info"`
+	}
 )
 
-func (t *Torrent) Save(w io.Writer) error {
+func (t *TorrentMulti) Save(w io.Writer) error {
 	return bencode.NewEncoder(w).Encode(t)
 }
-func (t *Torrent) Load(r io.Reader) error {
+func (t *TorrentMulti) Load(r io.Reader) error {
+	return bencode.NewDecoder(r).Decode(t)
+}
+
+func (t *TorrentSingle) Save(w io.Writer) error {
+	return bencode.NewEncoder(w).Encode(t)
+}
+func (t *TorrentSingle) Load(r io.Reader) error {
 	return bencode.NewDecoder(r).Decode(t)
 }
 
@@ -68,18 +86,14 @@ func autoPieceLen(length int) (t int) {
 	return
 }
 
-func MakeTorrent(path string, pieceLen int, source string, private bool, ann ...string) (*Torrent, error) {
-	t := &Torrent{
-		AnnounceList: make([][]string, 0),
-		CreationDate: time.Now().Unix(),
-		CreatedBy:    "varyoo",
-		Info: InfoDict{
-			Name:   filepath.Base(path),
-			Source: source,
+func MakeMultiTorrent(path string, pieceLen int, source string, private bool, ann ...string) (
+	*TorrentMulti, error) {
+
+	t := TorrentMulti{
+		Torrent: mkTorrent(ann),
+		Info: InfoMulti{
+			Info: mkInfo(source, path, private),
 		},
-	}
-	if private {
-		t.Info.Private = 1
 	}
 
 	info, err := os.Stat(path)
@@ -87,9 +101,8 @@ func MakeTorrent(path string, pieceLen int, source string, private bool, ann ...
 		return nil, err
 	}
 
-	// announce
-	for _, a := range ann {
-		t.AnnounceList = append(t.AnnounceList, []string{a})
+	if !info.IsDir() {
+		return nil, errors.New("not a directory")
 	}
 
 	// files
@@ -111,13 +124,7 @@ func MakeTorrent(path string, pieceLen int, source string, private bool, ann ...
 		return nil
 	}
 
-	if info.IsDir() {
-		err = filepath.Walk(path, walker)
-	} else {
-		// Note the hack to have a leading root element.
-		// Just like if it was called by filepath.Walk.
-		err = walker(fmt.Sprintf("./%s", info.Name()), info, nil)
-	}
+	err = filepath.Walk(path, walker)
 	if err != nil {
 		return nil, errors.Wrap(err, "exploring")
 	}
@@ -138,7 +145,40 @@ func MakeTorrent(path string, pieceLen int, source string, private bool, ann ...
 		readers = append(readers, f)
 	}
 	r := io.MultiReader(readers...)
+
+	pieces, err := hash(r, pieceLen)
+	t.Info.Pieces = pieces
+
+	return &t, nil
+}
+
+func mkTorrent(ann []string) Torrent {
+	t := Torrent{
+		AnnounceList: make([][]string, 0),
+		CreationDate: time.Now().Unix(),
+		CreatedBy:    "varyoo",
+	}
+	for _, a := range ann {
+		t.AnnounceList = append(t.AnnounceList, []string{a})
+	}
+	return t
+}
+
+func mkInfo(source, path string, private bool) Info {
+	i := Info{
+		Source: source,
+		Name:   filepath.Base(path),
+	}
+	if private {
+		i.Private = 1
+	}
+	return i
+}
+
+func hash(r io.Reader, pieceLen int) (string, error) {
 	b := make([]byte, pieceLen)
+	var pieces string
+
 	for {
 		n, err := io.ReadFull(r, b)
 		if err == io.ErrUnexpectedEOF {
@@ -147,11 +187,49 @@ func MakeTorrent(path string, pieceLen int, source string, private bool, ann ...
 		} else if err == io.EOF {
 			break
 		}
+
 		if err != nil {
-			return nil, errors.Wrap(err, "hashing")
+			return "", err
 		}
-		t.Info.Pieces += string(hashPiece(b))
+		pieces += string(hashPiece(b))
 	}
 
-	return t, nil
+	return pieces, nil
+}
+
+func MakeSingleTorrent(path string, pieceLen int, source string, private bool, ann ...string) (
+	*TorrentSingle, error) {
+
+	t := TorrentSingle{
+		Torrent: mkTorrent(ann),
+		Info: InfoSingle{
+			Info: mkInfo(source, path, private),
+		},
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	length := int(info.Size())
+	if pieceLen == 0 {
+		pieceLen = autoPieceLen(length)
+	}
+
+	pieces, err := hash(f, pieceLen)
+	if err != nil {
+		return nil, err
+	}
+
+	t.Info.Pieces = pieces
+	t.Info.PieceLength = pieceLen
+	t.Info.Length = length
+
+	return &t, nil
 }
