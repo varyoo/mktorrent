@@ -90,19 +90,18 @@ func TestSingle(t *testing.T) {
 			Length: 0,
 		},
 	}
-	have, err := MakeSingleTorrent(test.File, 0, "green", true, "http://localhost/announce",
-		"udp://localhost:3000")
+	wt, err := MakeTorrent(test.File, 0, "green", true, []string{"http://localhost/announce",
+		"udp://localhost:3000"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	singleEqual(t, want, have)
 
 	b := &bytes.Buffer{}
-	err = have.Save(b)
+	err = wt.Save(b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	have = &TorrentSingle{}
+	have := &TorrentSingle{}
 	err = have.Load(b)
 	if err != nil {
 		t.Fatal(err)
@@ -133,19 +132,18 @@ func TestMulti(t *testing.T) {
 			},
 		},
 	}
-	have, err := MakeMultiTorrent(test.Dir, 0, "green", false, "http://localhost/announce",
-		"udp://localhost:3000")
+	wt, err := MakeTorrent(test.Dir, 0, "green", false, []string{"http://localhost/announce",
+		"udp://localhost:3000"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	multiEqual(t, want, have)
 
 	b := &bytes.Buffer{}
-	err = have.Save(b)
+	err = wt.Save(b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	have = &TorrentMulti{}
+	have := &TorrentMulti{}
 	err = have.Load(b)
 	if err != nil {
 		t.Fatal(err)

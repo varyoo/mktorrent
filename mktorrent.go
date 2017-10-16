@@ -55,6 +55,10 @@ type (
 		Torrent
 		Info InfoSingle `bencode:"info"`
 	}
+
+	WriteTorrent interface {
+		Save(io.Writer) error
+	}
 )
 
 func (t *TorrentMulti) Save(w io.Writer) error {
@@ -84,72 +88,6 @@ func autoPieceLen(length int) (t int) {
 		t = MaxPieceLen
 	}
 	return
-}
-
-func MakeMultiTorrent(path string, pieceLen int, source string, private bool, ann ...string) (
-	*TorrentMulti, error) {
-
-	t := TorrentMulti{
-		Torrent: mkTorrent(ann),
-		Info: InfoMulti{
-			Info: mkInfo(source, path, private),
-		},
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-
-	if !info.IsDir() {
-		return nil, errors.New("not a directory")
-	}
-
-	// files
-	var length int
-	paths := make([]string, 0)
-	walker := func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			f := File{
-				Length: int(info.Size()),
-				Path:   strings.Split(path, "/")[1:],
-			}
-			length += f.Length
-			t.Info.Files = append(t.Info.Files, f)
-			paths = append(paths, path)
-		}
-		return nil
-	}
-
-	err = filepath.Walk(path, walker)
-	if err != nil {
-		return nil, errors.Wrap(err, "exploring")
-	}
-
-	// piece length
-	if pieceLen == 0 {
-		pieceLen = autoPieceLen(length)
-	}
-	t.Info.PieceLength = pieceLen
-
-	// hashing
-	readers := make([]io.Reader, 0, len(paths))
-	for _, path := range paths {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		readers = append(readers, f)
-	}
-	r := io.MultiReader(readers...)
-
-	pieces, err := hash(r, pieceLen)
-	t.Info.Pieces = pieces
-
-	return &t, nil
 }
 
 func mkTorrent(ann []string) Torrent {
@@ -197,39 +135,92 @@ func hash(r io.Reader, pieceLen int) (string, error) {
 	return pieces, nil
 }
 
-func MakeSingleTorrent(path string, pieceLen int, source string, private bool, ann ...string) (
-	*TorrentSingle, error) {
+type file struct {
+	size int
+	path string
+}
 
-	t := TorrentSingle{
-		Torrent: mkTorrent(ann),
-		Info: InfoSingle{
-			Info: mkInfo(source, path, private),
-		},
+func MakeTorrent(path string, pieceLen int, source string, private bool, announces []string) (
+	WriteTorrent, error) {
+
+	var length int
+	files := make([]file, 0)
+
+	walker := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			f := file{
+				size: int(info.Size()),
+				path: path,
+			}
+			length += f.size
+			files = append(files, f)
+		}
+
+		return nil
 	}
 
-	f, err := os.Open(path)
+	err := filepath.Walk(path, walker)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "exploring")
 	}
 
-	info, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	length := int(info.Size())
 	if pieceLen == 0 {
 		pieceLen = autoPieceLen(length)
 	}
 
-	pieces, err := hash(f, pieceLen)
+	readers := make([]io.Reader, 0, len(files))
+	for _, file := range files {
+		f, err := os.Open(file.path)
+		if err != nil {
+			return nil, err
+		}
+		readers = append(readers, f)
+	}
+	r := io.MultiReader(readers...)
+
+	pieces, err := hash(r, pieceLen)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "hashing")
 	}
 
-	t.Info.Pieces = pieces
-	t.Info.PieceLength = pieceLen
-	t.Info.Length = length
+	torrent := mkTorrent(announces)
+	info := mkInfo(source, path, private)
+	info.Pieces = pieces
+	info.PieceLength = pieceLen
 
-	return &t, nil
+	if n := len(files); n == 0 {
+		return nil, errors.New("0 files, is this something possible?")
+	} else if n == 1 {
+		t := TorrentSingle{
+			Torrent: torrent,
+			Info: InfoSingle{
+				Info:   info,
+				Length: length,
+			},
+		}
+		return &t, nil
+	} else {
+		t := TorrentMulti{
+			Torrent: torrent,
+			Info: InfoMulti{
+				Info:  info,
+				Files: make([]File, 0, len(files)),
+			},
+		}
+		for _, file := range files {
+			f := File{}
+			path := strings.Split(file.path, string(os.PathSeparator))
+			if len(path) < 1 {
+				return nil, errors.Wrapf(err, "unexpected path %s", file.path)
+			}
+			f.Path = path[1:]
+			f.Length = file.size
+			t.Info.Files = append(t.Info.Files, f)
+		}
+		return &t, nil
+	}
 }

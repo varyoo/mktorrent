@@ -83,23 +83,7 @@ func try() error {
 
 	for _, path := range paths {
 		if err := func() error {
-			info, err := os.Stat(path)
-			if err != nil {
-				return errors.Wrap(err, "is it a dir or is it a file?")
-			}
-
-			var t tor
-			var mode string
-			if info.IsDir() {
-				mode = "multiple files torrent"
-				t, err = mktorrent.MakeMultiTorrent(path, 0, source, private, ann...)
-			} else {
-				mode = "single file torrent"
-				t, err = mktorrent.MakeSingleTorrent(path, 0, source, private, ann...)
-			}
-			if verbose {
-				fmt.Printf("Mode: %s\n", mode)
-			}
+			wt, err := mktorrent.MakeTorrent(path, 0, source, private, ann)
 			if err != nil {
 				return errors.Wrap(err, "can't make torrent")
 			}
@@ -110,7 +94,7 @@ func try() error {
 				return err
 			}
 
-			return errors.Wrap(t.Save(w), "can't save torrent")
+			return errors.Wrap(wt.Save(w), "can't save torrent")
 		}(); err != nil {
 			return errors.Wrapf(err, "%s", path)
 		}
