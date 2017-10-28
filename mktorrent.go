@@ -90,29 +90,6 @@ func autoPieceLen(length int) (t int) {
 	return
 }
 
-func mkTorrent(ann []string) Torrent {
-	t := Torrent{
-		AnnounceList: make([][]string, 0),
-		CreationDate: time.Now().Unix(),
-		CreatedBy:    "varyoo",
-	}
-	for _, a := range ann {
-		t.AnnounceList = append(t.AnnounceList, []string{a})
-	}
-	return t
-}
-
-func mkInfo(source, path string, private bool) Info {
-	i := Info{
-		Source: source,
-		Name:   filepath.Base(path),
-	}
-	if private {
-		i.Private = 1
-	}
-	return i
-}
-
 func hash(r io.Reader, pieceLen int) (string, error) {
 	b := make([]byte, pieceLen)
 	var pieces string
@@ -187,10 +164,24 @@ func MakeTorrent(path string, pieceLen int, source string, private bool, announc
 		return nil, errors.Wrap(err, "hashing")
 	}
 
-	torrent := mkTorrent(announces)
-	info := mkInfo(source, path, private)
-	info.Pieces = pieces
-	info.PieceLength = pieceLen
+	torrent := Torrent{
+		AnnounceList: make([][]string, 0, len(announces)),
+		CreationDate: time.Now().Unix(),
+		CreatedBy:    "varyoo",
+	}
+	for _, a := range announces {
+		torrent.AnnounceList = append(torrent.AnnounceList, []string{a})
+	}
+
+	info := Info{
+		Source:      source,
+		Name:        filepath.Base(path),
+		Pieces:      pieces,
+		PieceLength: pieceLen,
+	}
+	if private {
+		info.Private = 1
+	}
 
 	if n := len(files); n == 0 {
 		return nil, errors.New("0 files, is this something possible?")
