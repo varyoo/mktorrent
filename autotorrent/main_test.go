@@ -63,7 +63,7 @@ func TestSingle(t *testing.T) {
 }
 
 func TestMulti(t *testing.T) {
-	os.Args = []string{"autotorrent", "yellow", test.Dir}
+	os.Args = []string{"autotorrent", "-g", "4", "yellow", test.Dir}
 	err := try()
 	if err != nil {
 		t.Fatal(err)

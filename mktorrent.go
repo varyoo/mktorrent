@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -17,6 +18,8 @@ const (
 	MinPieceLen int = 16384
 	// 2^26: mktorrent maximum
 	MaxPieceLen = 67108864
+
+	AutoPieceLength = 0
 )
 
 type (
@@ -56,7 +59,7 @@ type (
 		Info InfoSingle `bencode:"info"`
 	}
 
-	WriteTorrent interface {
+	Buffer interface {
 		Save(io.Writer) error
 	}
 )
@@ -75,11 +78,6 @@ func (t *TorrentSingle) Load(r io.Reader) error {
 	return bencode.NewDecoder(r).Decode(t)
 }
 
-func hashPiece(b []byte) []byte {
-	h := sha1.New()
-	h.Write(b)
-	return h.Sum(nil)
-}
 func autoPieceLen(length int) (t int) {
 	t = length / 1000
 	if t < MinPieceLen {
@@ -90,36 +88,21 @@ func autoPieceLen(length int) (t int) {
 	return
 }
 
-func hash(r io.Reader, pieceLen int) (string, error) {
-	b := make([]byte, pieceLen)
-	var pieces string
-
-	for {
-		n, err := io.ReadFull(r, b)
-		if err == io.ErrUnexpectedEOF {
-			b = b[:n]
-			err = nil
-		} else if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return "", err
-		}
-		pieces += string(hashPiece(b))
-	}
-
-	return pieces, nil
-}
-
 type file struct {
 	size int
 	path string
 }
 
-func MakeTorrent(path string, pieceLen int, source string, private bool, announces []string) (
-	WriteTorrent, error) {
+type Params struct {
+	Path         string
+	PieceLength  int
+	Source       string
+	Private      bool
+	AnnounceList []string
+	Goroutines   int
+}
 
+func MakeTorrent(params Params) (Buffer, error) {
 	var length int
 	files := make([]file, 0)
 
@@ -140,46 +123,55 @@ func MakeTorrent(path string, pieceLen int, source string, private bool, announc
 		return nil
 	}
 
-	err := filepath.Walk(path, walker)
+	err := filepath.Walk(params.Path, walker)
 	if err != nil {
 		return nil, errors.Wrap(err, "exploring")
 	}
 
+	pieceLen := params.PieceLength
 	if pieceLen == 0 {
 		pieceLen = autoPieceLen(length)
 	}
 
-	readers := make([]io.Reader, 0, len(files))
-	for _, file := range files {
-		f, err := os.Open(file.path)
-		if err != nil {
-			return nil, err
-		}
-		readers = append(readers, f)
+	if params.Goroutines < 1 {
+		params.Goroutines = 1
 	}
-	r := io.MultiReader(readers...)
+	pieces := make(chan piece, params.Goroutines)
+	wg := &sync.WaitGroup{}
+	for i := 0; i < params.Goroutines; i++ {
+		wg.Add(1)
+		go hashRoutine(pieces, wg)
+	}
 
-	pieces, err := hash(r, pieceLen)
-	if err != nil {
-		return nil, errors.Wrap(err, "hashing")
+	pieceCount := length / pieceLen
+	if length%pieceLen != 0 {
+		pieceCount += 1
 	}
+	hash := make([]byte, pieceCount*sha1.Size)
+
+	err = feed(pieces, pieceLen, files, hash)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading")
+	}
+
+	wg.Wait() // wait for the hash to complete
 
 	torrent := Torrent{
-		AnnounceList: make([][]string, 0, len(announces)),
+		AnnounceList: make([][]string, 0, len(params.AnnounceList)),
 		CreationDate: time.Now().Unix(),
 		CreatedBy:    "varyoo",
 	}
-	for _, a := range announces {
+	for _, a := range params.AnnounceList {
 		torrent.AnnounceList = append(torrent.AnnounceList, []string{a})
 	}
 
 	info := Info{
-		Source:      source,
-		Name:        filepath.Base(path),
-		Pieces:      pieces,
+		Source:      params.Source,
+		Name:        filepath.Base(params.Path),
+		Pieces:      string(hash),
 		PieceLength: pieceLen,
 	}
-	if private {
+	if params.Private {
 		info.Private = 1
 	}
 
@@ -214,4 +206,65 @@ func MakeTorrent(path string, pieceLen int, source string, private bool, announc
 		}
 		return &t, nil
 	}
+}
+
+type piece struct {
+	data []byte
+	hash []byte
+}
+
+func hashRoutine(pieces <-chan piece, wg *sync.WaitGroup) {
+	for piece := range pieces {
+		hash := sha1.Sum(piece.data)
+		copy(piece.hash, hash[:])
+	}
+	wg.Done()
+}
+
+func feed(pieces chan<- piece, pieceLen int, files []file, hash []byte) error {
+	defer close(pieces)
+
+	b := make([]byte, pieceLen) // piece buffer
+	s := b                      // intra-piece buffer
+	offset := 0                 // hash offset
+
+	for _, meta := range files {
+		f, err := os.Open(meta.path)
+		if err != nil {
+			return err
+		}
+
+		for {
+			n, err := io.ReadFull(f, s)
+
+			if n == len(s) {
+				// this piece is filled up
+				end := offset + sha1.Size
+				pieces <- piece{data: b, hash: hash[offset:end]}
+
+				b = make([]byte, pieceLen)
+				s = b
+				offset = end
+			} else {
+				s = s[n:]
+			}
+
+			if err == io.ErrUnexpectedEOF || err == io.EOF {
+				if err = f.Close(); err != nil {
+					return err
+				}
+				break // next file
+			} else if err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(s) != len(b) {
+		// finally append the hash of the last irregular piece to the hash string
+		remaining := len(b) - len(s)
+		pieces <- piece{data: b[:remaining], hash: hash[offset:]}
+	}
+
+	return nil
 }

@@ -33,13 +33,15 @@ func printHelp() {
 }
 
 var (
-	verbose bool
-	help    bool
+	verbose    bool
+	help       bool
+	goroutines int
 )
 
 func init() {
 	flag.BoolVar(&help, "h", false, "show this help screen")
 	flag.BoolVar(&verbose, "v", false, "be verbose")
+	flag.IntVar(&goroutines, "g", 2, "number of Goroutines for calculating hashes")
 }
 
 type tor interface {
@@ -69,21 +71,26 @@ func try() error {
 	if !viper.InConfig(profile) {
 		return errors.New("profile not found")
 	}
-	ann := viper.GetStringSlice(fmt.Sprintf("%s.announce", profile))
-	source := viper.GetString(fmt.Sprintf("%s.source", profile))
-	private := viper.GetBool(fmt.Sprintf("%s.private", profile))
+	params := mktorrent.Params{
+		PieceLength:  0,
+		Goroutines:   goroutines,
+		AnnounceList: viper.GetStringSlice(fmt.Sprintf("%s.announce", profile)),
+		Source:       viper.GetString(fmt.Sprintf("%s.source", profile)),
+		Private:      viper.GetBool(fmt.Sprintf("%s.private", profile)),
+	}
 
 	if verbose {
 		fmt.Printf("Profile: %s\nAnnounce:", profile)
-		for _, a := range ann {
+		for _, a := range params.AnnounceList {
 			fmt.Printf(" %s", a)
 		}
-		fmt.Printf("\nSource: %s\nPrivate: %t\n", source, private)
+		fmt.Printf("\nSource: %s\nPrivate: %t\n", params.Source, params.Private)
 	}
 
 	for _, path := range paths {
 		if err := func() error {
-			wt, err := mktorrent.MakeTorrent(path, 0, source, private, ann)
+			params.Path = path
+			wt, err := mktorrent.MakeTorrent(params)
 			if err != nil {
 				return errors.Wrap(err, "can't make torrent")
 			}

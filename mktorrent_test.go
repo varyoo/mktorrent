@@ -90,8 +90,18 @@ func TestSingle(t *testing.T) {
 			Length: 0,
 		},
 	}
-	wt, err := MakeTorrent(test.File, 0, "green", true, []string{"http://localhost/announce",
-		"udp://localhost:3000"})
+	p := Params{
+		Goroutines:  1,
+		Path:        test.File,
+		PieceLength: 0,
+		Source:      "green",
+		Private:     true,
+		AnnounceList: []string{
+			"http://localhost/announce",
+			"udp://localhost:3000",
+		},
+	}
+	wt, err := MakeTorrent(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,8 +142,18 @@ func TestMulti(t *testing.T) {
 			},
 		},
 	}
-	wt, err := MakeTorrent(test.Dir, 0, "green", false, []string{"http://localhost/announce",
-		"udp://localhost:3000"})
+	p := Params{
+		Goroutines:  4,
+		Path:        test.Dir,
+		PieceLength: 0,
+		Source:      "green",
+		Private:     false,
+		AnnounceList: []string{
+			"http://localhost/announce",
+			"udp://localhost:3000",
+		},
+	}
+	wt, err := MakeTorrent(p)
 	if err != nil {
 		t.Fatal(err)
 	}
