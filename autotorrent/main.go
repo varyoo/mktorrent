@@ -9,6 +9,7 @@ import (
 
 	"github.com/varyoo/mktorrent"
 
+	"github.com/c2h5oh/datasize"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
@@ -72,11 +73,25 @@ func try() error {
 		return errors.New("profile not found")
 	}
 	params := mktorrent.Params{
-		PieceLength:  0,
 		Goroutines:   goroutines,
 		AnnounceList: viper.GetStringSlice(fmt.Sprintf("%s.announce", profile)),
 		Source:       viper.GetString(fmt.Sprintf("%s.source", profile)),
 		Private:      viper.GetBool(fmt.Sprintf("%s.private", profile)),
+	}
+	if mpl := viper.GetString(fmt.Sprintf("%s.max_piece_length", profile)); mpl != "" {
+		var bs datasize.ByteSize
+		if err := bs.UnmarshalText([]byte(mpl)); err != nil {
+			return errors.Wrapf(err, "%s.max_piece_length", profile)
+		}
+		if bs.Bytes() > uint64(mktorrent.MaxPieceLen) {
+			return fmt.Errorf("%s.max_piece_length is too big")
+		}
+		params.PieceLength = mktorrent.MaxPieceLength(int(bs.Bytes()))
+		if verbose {
+			fmt.Printf("Max piece length: %s\n", mpl)
+		}
+	} else {
+		params.PieceLength = mktorrent.AutoPieceLength
 	}
 
 	if verbose {

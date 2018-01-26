@@ -93,7 +93,7 @@ func TestSingle(t *testing.T) {
 	p := Params{
 		Goroutines:  1,
 		Path:        test.File,
-		PieceLength: 0,
+		PieceLength: AutoPieceLength,
 		Source:      "green",
 		Private:     true,
 		AnnounceList: []string{
@@ -145,7 +145,7 @@ func TestMulti(t *testing.T) {
 	p := Params{
 		Goroutines:  4,
 		Path:        test.Dir,
-		PieceLength: 0,
+		PieceLength: AutoPieceLength,
 		Source:      "green",
 		Private:     false,
 		AnnounceList: []string{

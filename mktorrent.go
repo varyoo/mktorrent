@@ -18,8 +18,6 @@ const (
 	MinPieceLen int = 16384
 	// 2^26: mktorrent maximum
 	MaxPieceLen = 67108864
-
-	AutoPieceLength = 0
 )
 
 type (
@@ -78,14 +76,22 @@ func (t *TorrentSingle) Load(r io.Reader) error {
 	return bencode.NewDecoder(r).Decode(t)
 }
 
-func autoPieceLen(length int) (t int) {
-	t = length / 1000
-	if t < MinPieceLen {
-		t = MinPieceLen
-	} else if t > MaxPieceLen {
-		t = MaxPieceLen
+func BoundPieceLength(min, max int) PieceLength {
+	return func(length int) (t int) {
+		t = length / 1000
+		if t < min {
+			t = min
+		} else if t > max {
+			t = max
+		}
+		return
 	}
-	return
+}
+
+var AutoPieceLength = BoundPieceLength(MinPieceLen, MaxPieceLen)
+
+func MaxPieceLength(max int) PieceLength {
+	return BoundPieceLength(MinPieceLen, max)
 }
 
 type file struct {
@@ -93,9 +99,11 @@ type file struct {
 	path string
 }
 
+type PieceLength func(length int) int
+
 type Params struct {
 	Path         string
-	PieceLength  int
+	PieceLength  PieceLength
 	Source       string
 	Private      bool
 	AnnounceList []string
@@ -128,10 +136,7 @@ func MakeTorrent(params Params) (Buffer, error) {
 		return nil, errors.Wrap(err, "exploring")
 	}
 
-	pieceLen := params.PieceLength
-	if pieceLen == 0 {
-		pieceLen = autoPieceLen(length)
-	}
+	pieceLen := params.PieceLength(length)
 
 	if params.Goroutines < 1 {
 		params.Goroutines = 1
