@@ -3,20 +3,20 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/varyoo/mktorrent"
 
+	"github.com/BurntSushi/toml"
 	"github.com/c2h5oh/datasize"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 )
 
 const (
-	usage  string = `Usage: autotorrent [OPTIONS] PROFILE FILES...`
-	config        = `Configuration file:
+	usage      string = `Usage: autotorrent [OPTIONS] PROFILE FILES...`
+	configHelp        = `Configuration file:
 The TOML configuration file is at ~/.config/autotorrent.toml.
 A configuration file is a collection of profiles.
 The following is one profile:
@@ -30,7 +30,7 @@ private = true`
 func printHelp() {
 	fmt.Printf("%s\n\nOptions:\n", usage)
 	flag.PrintDefaults()
-	fmt.Printf("\n%s\n", config)
+	fmt.Printf("\n%s\n", configHelp)
 }
 
 var (
@@ -45,8 +45,27 @@ func init() {
 	flag.IntVar(&goroutines, "g", 2, "number of Goroutines for calculating hashes")
 }
 
-type tor interface {
-	Save(io.Writer) error
+type (
+	profile struct {
+		Name           string
+		Announce       []string
+		Source         string
+		Private        bool
+		MaxPieceLength string `toml:"max_piece_length"`
+	}
+	config struct {
+		profile
+		Profiles []profile `toml:"profile"`
+	}
+)
+
+func (c config) GetProfile(name string) *profile {
+	for _, p := range c.Profiles {
+		if p.Name == name {
+			return &p
+		}
+	}
+	return nil
 }
 
 func try() error {
@@ -60,42 +79,54 @@ func try() error {
 		printHelp()
 		return errors.New("not enough arguments")
 	}
-	profile := paths[0]
+	profileName := paths[0]
 	paths = paths[1:]
 
-	viper.SetConfigName("autotorrent")
-	viper.AddConfigPath(".") // useful for tests
-	viper.AddConfigPath("$HOME/.config/")
-	if err := viper.ReadInConfig(); err != nil {
-		return err
+	f, err := os.Open("autotorrent.toml")
+	if err != nil {
+		if os.IsNotExist(err) {
+			f, err = os.Open(filepath.Join(os.Getenv("HOME"), ".config", "autotorrent.toml"))
+		}
 	}
-	if !viper.InConfig(profile) {
+	if err != nil {
+		return errors.Wrap(err, "config file")
+	}
+
+	conf := config{}
+	_, err = toml.DecodeReader(f, &conf)
+	if err != nil {
+		return errors.Wrap(err, "config")
+	}
+
+	pro := conf.GetProfile(profileName)
+	if pro == nil {
 		return errors.New("profile not found")
 	}
+
 	params := mktorrent.Params{
 		Goroutines:   goroutines,
-		AnnounceList: viper.GetStringSlice(fmt.Sprintf("%s.announce", profile)),
-		Source:       viper.GetString(fmt.Sprintf("%s.source", profile)),
-		Private:      viper.GetBool(fmt.Sprintf("%s.private", profile)),
+		AnnounceList: pro.Announce,
+		Source:       pro.Source,
+		Private:      pro.Private,
 	}
-	if mpl := viper.GetString(fmt.Sprintf("%s.max_piece_length", profile)); mpl != "" {
+	if pro.MaxPieceLength != "" {
 		var bs datasize.ByteSize
-		if err := bs.UnmarshalText([]byte(mpl)); err != nil {
-			return errors.Wrapf(err, "%s.max_piece_length", profile)
+		if err := bs.UnmarshalText([]byte(pro.MaxPieceLength)); err != nil {
+			return errors.Wrapf(err, "%s.max_piece_length", profileName)
 		}
 		if bs.Bytes() > uint64(mktorrent.MaxPieceLen) {
-			return fmt.Errorf("%s.max_piece_length is too big")
+			return fmt.Errorf("%s.max_piece_length is too big", profileName)
 		}
 		params.PieceLength = mktorrent.MaxPieceLength(int(bs.Bytes()))
 		if verbose {
-			fmt.Printf("Max piece length: %s\n", mpl)
+			fmt.Printf("Max piece length: %s\n", pro.MaxPieceLength)
 		}
 	} else {
 		params.PieceLength = mktorrent.AutoPieceLength
 	}
 
 	if verbose {
-		fmt.Printf("Profile: %s\nAnnounce:", profile)
+		fmt.Printf("Profile: %s\nAnnounce:", profileName)
 		for _, a := range params.AnnounceList {
 			fmt.Printf(" %s", a)
 		}

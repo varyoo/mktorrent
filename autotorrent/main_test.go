@@ -16,12 +16,14 @@ func init() {
 	}
 
 	err = ioutil.WriteFile("autotorrent.toml", []byte(`
-[green]
-announce = "http://localhost/announce"
+[[profile]]
+name = "green"
+announce = ["http://localhost/announce"]
 source = "GREEN"
 private = true
 
-[yellow]
+[[profile]]
+name = "yellow"
 announce = ["http://localhost/announce", "udp://localhost:3000"]
 source = "YELLOW"
 private = false
