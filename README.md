@@ -23,8 +23,9 @@ private = false
 ~~~
 
 ~~~ sh
-autotorrent [OPTIONS] PROFILE FILES...
-autotorrent -v green file/or/directory
+$ autotorrent [OPTIONS] PROFILE FILES...
+$ autotorrent -v green file/or/directory
+ 473 / 1100 [================>----------------------]  43.00% 49s
 ~~~
 
 # Quick start
