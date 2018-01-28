@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cheggaaa/pb"
 	"github.com/varyoo/mktorrent"
 
 	"github.com/BurntSushi/toml"
@@ -104,7 +105,6 @@ func try() error {
 	}
 
 	params := mktorrent.Params{
-		Goroutines:   goroutines,
 		AnnounceList: pro.Announce,
 		Source:       pro.Source,
 		Private:      pro.Private,
@@ -136,10 +136,17 @@ func try() error {
 	for _, path := range paths {
 		if err := func() error {
 			params.Path = path
-			wt, err := mktorrent.MakeTorrent(params)
+			pre, err := mktorrent.PreHashing(params)
 			if err != nil {
-				return errors.Wrap(err, "can't make torrent")
+				return errors.Wrap(err, "pre hashing")
 			}
+
+			pro := pb.New(pre.GetPieceCount()).Start()
+			wt, err := pre.MakeTorrent(goroutines, pro)
+			if err != nil {
+				return errors.Wrap(err, "hashing")
+			}
+			pro.Finish()
 
 			w, err := os.Create(fmt.Sprintf("%s.torrent", path))
 			if err != nil {

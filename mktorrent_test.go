@@ -46,19 +46,19 @@ func infoEqual(t *testing.T, a, b Info) {
 }
 
 func singleEqual(t *testing.T, a, b *TorrentSingle) {
-	infoEqual(t, a.Info.Info, b.Info.Info)
+	infoEqual(t, a.InfoSingle.Info, b.InfoSingle.Info)
 	torrentEqual(t, a.Torrent, b.Torrent)
 }
 
 func multiEqual(t *testing.T, a, b *TorrentMulti) {
-	infoEqual(t, a.Info.Info, b.Info.Info)
+	infoEqual(t, a.InfoMulti.Info, b.InfoMulti.Info)
 	torrentEqual(t, a.Torrent, b.Torrent)
 
 	m := make(map[string]File)
-	for _, f := range a.Info.Files {
+	for _, f := range a.InfoMulti.Files {
 		m[filepath.Join(f.Path...)] = f
 	}
-	for _, f := range b.Info.Files {
+	for _, f := range b.InfoMulti.Files {
 		path := filepath.Join(f.Path...)
 		f = m[path]
 		if len(f.Path) == 0 {
@@ -79,7 +79,7 @@ func TestSingle(t *testing.T) {
 				{"udp://localhost:3000"},
 			},
 		},
-		Info: InfoSingle{
+		InfoSingle: InfoSingle{
 			Info: Info{
 				Source:      "green",
 				Private:     1,
@@ -90,8 +90,8 @@ func TestSingle(t *testing.T) {
 			Length: 0,
 		},
 	}
-	p := Params{
-		Goroutines:  1,
+
+	ps := Params{
 		Path:        test.File,
 		PieceLength: AutoPieceLength,
 		Source:      "green",
@@ -101,7 +101,12 @@ func TestSingle(t *testing.T) {
 			"udp://localhost:3000",
 		},
 	}
-	wt, err := MakeTorrent(p)
+	pre, err := PreHashing(ps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wt, err := pre.MakeTorrent(1, NoProgress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +132,7 @@ func TestMulti(t *testing.T) {
 				{"udp://localhost:3000"},
 			},
 		},
-		Info: InfoMulti{
+		InfoMulti: InfoMulti{
 			Info: Info{
 				Source:      "green",
 				Private:     0,
@@ -142,8 +147,8 @@ func TestMulti(t *testing.T) {
 			},
 		},
 	}
-	p := Params{
-		Goroutines:  4,
+
+	ps := Params{
 		Path:        test.Dir,
 		PieceLength: AutoPieceLength,
 		Source:      "green",
@@ -153,7 +158,12 @@ func TestMulti(t *testing.T) {
 			"udp://localhost:3000",
 		},
 	}
-	wt, err := MakeTorrent(p)
+	pre, err := PreHashing(ps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wt, err := pre.MakeTorrent(4, NoProgress)
 	if err != nil {
 		t.Fatal(err)
 	}
