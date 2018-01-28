@@ -16,22 +16,14 @@ import (
 )
 
 const (
-	usage      string = `Usage: autotorrent [OPTIONS] PROFILE FILES...`
-	configHelp        = `Configuration file:
-The TOML configuration file is at ~/.config/autotorrent.toml.
-A configuration file is a collection of profiles.
-The following is one profile:
-
-[PROFILE]
-announce = ["http://tracker.org:2710/announce", "udp://tracker.it:80"]
-source = "YELLOW"
-private = true`
+	usage string = `Usage: autotorrent [OPTIONS] PROFILE FILES...
+More help at https://github.com/varyoo/mktorrent
+`
 )
 
 func printHelp() {
-	fmt.Printf("%s\n\nOptions:\n", usage)
+	fmt.Printf("%s\nOPTIONS:\n", usage)
 	flag.PrintDefaults()
-	fmt.Printf("\n%s\n", configHelp)
 }
 
 var (
