@@ -244,7 +244,7 @@ func (n *noProgress) Increment() int {
 	return 0
 }
 
-var NoProgress = &noProgress{}
+var NoProgress *noProgress = nil
 
 func (pre preHashing) MakeTorrent(goroutines int, pro Progress) (Buffer, error) {
 	h := NewHash(pre.GetPieceLength(), pre.GetPieceCount(), goroutines, pro)
