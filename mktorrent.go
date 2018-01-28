@@ -30,7 +30,7 @@ type (
 		Info
 		Files []File `bencode:"files"`
 
-		length int `bencode:"length"` // cached length
+		length int `bencode:"-"` // cached length
 	}
 	InfoSingle struct {
 		Info
