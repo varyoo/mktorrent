@@ -29,8 +29,6 @@ type (
 	InfoMulti struct {
 		Info
 		Files []File `bencode:"files"`
-
-		length int `bencode:"-"` // cached length
 	}
 	InfoSingle struct {
 		Info
@@ -74,18 +72,10 @@ func (i *InfoSingle) GetLength() int {
 }
 
 func (i *InfoMulti) GetLength() (l int) {
-	if i.length != 0 {
-		return i.length
-	}
-
 	for _, f := range i.Files {
 		l += f.Length
 	}
 	return l
-}
-
-func (i *Info) setPieces(p string) {
-	i.Pieces = p
 }
 
 func (t *TorrentMulti) Save(w io.Writer) error {
@@ -120,15 +110,23 @@ func MaxPieceLength(max int) PieceLength {
 	return BoundPieceLength(MinPieceLen, max)
 }
 
-type preHashing struct {
-	common
-	paths       []string
-	pieceLength int
-	pieceCount  int
+// Filesystem can make torrents from your files or directories.
+type Filesystem struct {
+	Info
+	Torrent
+
+	Files      []File
+	RealPaths  []string
+	PieceCount int
+	Length     int
 }
 
-func (p *preHashing) GetPieceCount() int {
-	return p.pieceCount
+func (f *Filesystem) GetLength() int {
+	return f.Length
+}
+
+func (f *Filesystem) GetPieceCount() int {
+	return f.PieceCount
 }
 
 type Params struct {
@@ -139,23 +137,11 @@ type Params struct {
 	AnnounceList []string
 }
 
-type common interface {
-	Buffer
-
-	setPieces(string)
-}
-
-func PreHashing(ps Params) (preHashing, error) {
-	pre := preHashing{}
-	info := InfoMulti{}
-	info.Name = filepath.Base(ps.Path)
-	info.Files = make([]File, 0)
-	info.Source = ps.Source
-	if ps.Private {
-		info.Private = 1
-	}
+func NewFilesystem(ps Params) (*Filesystem, error) {
+	files := make([]File, 0)
 	minDepth := 1
 	size := 0
+	realPaths := make([]string, 0)
 
 	walker := func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
@@ -175,8 +161,8 @@ func PreHashing(ps Params) (preHashing, error) {
 				Length: int(fi.Size()),
 				Path:   sp,
 			}
-			info.Files = append(info.Files, f)
-			pre.paths = append(pre.paths, path)
+			files = append(files, f)
+			realPaths = append(realPaths, path)
 			size += f.Length
 		}
 
@@ -185,15 +171,27 @@ func PreHashing(ps Params) (preHashing, error) {
 
 	err := filepath.Walk(ps.Path, walker)
 	if err != nil {
-		return pre, err
+		return nil, err
 	}
 
-	info.length = size
+	for j := 0; j < len(files); j++ {
+		f := &files[j]
+		f.Path = f.Path[minDepth:]
+	}
 
-	info.PieceLength = ps.PieceLength(size)
-	pre.pieceCount = size / info.PieceLength
-	if size%info.PieceLength != 0 {
-		pre.pieceCount += 1
+	pieceLength := ps.PieceLength(size)
+	pieceCount := size / pieceLength
+	if size%pieceLength != 0 {
+		pieceCount += 1
+	}
+
+	info := Info{
+		PieceLength: pieceLength,
+		Source:      ps.Source,
+		Name:        filepath.Base(ps.Path),
+	}
+	if ps.Private {
+		info.Private = 1
 	}
 
 	torrent := Torrent{
@@ -205,29 +203,15 @@ func PreHashing(ps Params) (preHashing, error) {
 		torrent.AnnounceList = append(torrent.AnnounceList, []string{a})
 	}
 
-	if len(info.Files) > 1 {
-		info.Name = info.Files[0].Path[minDepth-1]
-		for j := 0; j < len(info.Files); j++ {
-			f := &info.Files[j]
-			f.Path = f.Path[minDepth:]
-		}
-		pre.common = &TorrentMulti{
-			InfoMulti: info,
-			Torrent:   torrent,
-		}
-	} else if len(info.Files) == 1 {
-		pre.common = &TorrentSingle{
-			InfoSingle: InfoSingle{
-				Info:   info.Info,
-				Length: info.Files[0].Length,
-			},
-			Torrent: torrent,
-		}
-	} else {
-		return pre, errors.New("0 files torrent")
+	fs := &Filesystem{
+		Info:       info,
+		Torrent:    torrent,
+		Files:      files,
+		RealPaths:  realPaths,
+		PieceCount: pieceCount,
+		Length:     size,
 	}
-
-	return pre, nil
+	return fs, nil
 }
 
 type PieceLength func(length int) int
@@ -246,11 +230,11 @@ func (n *noProgress) Increment() int {
 
 var NoProgress *noProgress = nil
 
-func (pre preHashing) MakeTorrent(goroutines int, pro Progress) (Buffer, error) {
-	h := NewHash(pre.GetPieceLength(), pre.GetPieceCount(), goroutines, pro)
+func (f *Filesystem) MakeTorrent(goroutines int, pro Progress) (Buffer, error) {
+	h := NewHash(f.GetPieceLength(), f.PieceCount, goroutines, pro)
 	defer h.Close()
 
-	err := feed(h, pre.paths)
+	err := feed(h, f.RealPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -260,11 +244,32 @@ func (pre preHashing) MakeTorrent(goroutines int, pro Progress) (Buffer, error) 
 		return nil, err
 	}
 
-	pre.setPieces(string(hashBytes))
-	return pre, nil
+	f.Info.Pieces = string(hashBytes)
+	var buf Buffer
+	if n := len(f.Files); n > 1 {
+		buf = &TorrentMulti{
+			InfoMulti: InfoMulti{
+				Files: f.Files,
+				Info:  f.Info,
+			},
+			Torrent: f.Torrent,
+		}
+	} else if n == 1 {
+		buf = &TorrentSingle{
+			InfoSingle: InfoSingle{
+				Info:   f.Info,
+				Length: f.Length,
+			},
+			Torrent: f.Torrent,
+		}
+	} else {
+		panic("0 files torrent")
+	}
+
+	return buf, nil
 }
 
-func feed(h *digest, files []string) error {
+func feed(h *Digest, files []string) error {
 	for _, path := range files {
 		f, err := os.Open(path)
 		if err != nil {

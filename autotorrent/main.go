@@ -128,13 +128,13 @@ func try() error {
 	for _, path := range paths {
 		if err := func() error {
 			params.Path = path
-			pre, err := mktorrent.PreHashing(params)
+			fs, err := mktorrent.NewFilesystem(params)
 			if err != nil {
 				return errors.Wrap(err, "pre hashing")
 			}
 
-			pro := pb.New(pre.GetPieceCount()).Start()
-			wt, err := pre.MakeTorrent(goroutines, pro)
+			pro := pb.New(fs.GetPieceCount()).Start()
+			wt, err := fs.MakeTorrent(goroutines, pro)
 			if err != nil {
 				return errors.Wrap(err, "hashing")
 			}

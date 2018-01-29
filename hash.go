@@ -21,7 +21,8 @@ func hashRoutine(pieces <-chan piece, wg *sync.WaitGroup, pro Progress) {
 	wg.Done()
 }
 
-type digest struct {
+// Digest needs to be constructed by NewHash.
+type Digest struct {
 	intra      []byte
 	piece      []byte
 	piecesRead int
@@ -36,13 +37,13 @@ type digest struct {
 }
 
 // String returns the hexadecimal encoding of the hash if complete. If not it returns "".
-func (d *digest) String() string {
+func (d *Digest) String() string {
 	return d.complete
 }
 
 // Complete completes the hash first by appending to it the last irregular piece.
 // Complete then returns the complete hash or error if any.
-func (d *digest) Complete() ([]byte, error) {
+func (d *Digest) Complete() ([]byte, error) {
 	if len(d.intra) != len(d.piece) {
 		remaining := len(d.piece) - len(d.intra)
 		d.piece = d.piece[:remaining]
@@ -61,12 +62,12 @@ func (d *digest) Complete() ([]byte, error) {
 	return d.hash, nil
 }
 
-func NewHash(pieceSize, pieceCount, goroutines int, pro Progress) *digest {
+func NewHash(pieceSize, pieceCount, goroutines int, pro Progress) *Digest {
 	if goroutines < 1 {
 		goroutines = 1
 	}
 	buf := make([]byte, pieceSize)
-	d := &digest{
+	d := &Digest{
 		piece:      buf,
 		intra:      buf,
 		pieceSize:  pieceSize,
@@ -82,7 +83,7 @@ func NewHash(pieceSize, pieceCount, goroutines int, pro Progress) *digest {
 	return d
 }
 
-func (d *digest) push() error {
+func (d *Digest) push() error {
 	if d.piecesRead == d.pieceCount {
 		return io.ErrShortBuffer
 	}
@@ -98,7 +99,7 @@ func (d *digest) push() error {
 //
 // It returns the number of bytes read.
 // Any error except io.EOF encountered during the read is also returned.
-func (d *digest) ReadFrom(r io.Reader) (int64, error) {
+func (d *Digest) ReadFrom(r io.Reader) (int64, error) {
 	var nt int64
 
 	for {
@@ -124,7 +125,7 @@ func (d *digest) ReadFrom(r io.Reader) (int64, error) {
 	}
 }
 
-func (d *digest) Close() error {
+func (d *Digest) Close() error {
 	if !d.closed {
 		close(d.pieces)
 		d.wg.Wait()

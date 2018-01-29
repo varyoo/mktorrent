@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func sumAgainst(t *testing.T, h *digest, pieces ...string) {
+func sumAgainst(t *testing.T, h *Digest, pieces ...string) {
 	var want string
 	for _, piece := range pieces {
 		a := sha1.Sum([]byte(piece))
@@ -25,7 +25,7 @@ func sumAgainst(t *testing.T, h *digest, pieces ...string) {
 	}
 }
 
-func writeError(t *testing.T, d *digest, s string, mustFail bool) {
+func writeError(t *testing.T, d *Digest, s string, mustFail bool) {
 	_, err := d.ReadFrom(bytes.NewBuffer([]byte(s)))
 	if err != nil && !mustFail {
 		t.Helper()
@@ -33,7 +33,7 @@ func writeError(t *testing.T, d *digest, s string, mustFail bool) {
 	}
 }
 
-func write(t *testing.T, d *digest, s string) {
+func write(t *testing.T, d *Digest, s string) {
 	writeError(t, d, s, false)
 }
 

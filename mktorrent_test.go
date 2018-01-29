@@ -101,12 +101,12 @@ func TestSingle(t *testing.T) {
 			"udp://localhost:3000",
 		},
 	}
-	pre, err := PreHashing(ps)
+	fs, err := NewFilesystem(ps)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wt, err := pre.MakeTorrent(1, NoProgress)
+	wt, err := fs.MakeTorrent(1, NoProgress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,12 +158,12 @@ func TestMulti(t *testing.T) {
 			"udp://localhost:3000",
 		},
 	}
-	pre, err := PreHashing(ps)
+	fs, err := NewFilesystem(ps)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wt, err := pre.MakeTorrent(4, NoProgress)
+	wt, err := fs.MakeTorrent(4, NoProgress)
 	if err != nil {
 		t.Fatal(err)
 	}
