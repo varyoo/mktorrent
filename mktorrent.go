@@ -145,7 +145,7 @@ func NewFilesystem(ps Params) (*Filesystem, error) {
 		// create a single-file mode torrent
 		files = nil
 	} else {
-		panic("0 files torrent")
+		return nil, errors.New("no file found")
 	}
 
 	pieceLength := ps.PieceLength(size)
