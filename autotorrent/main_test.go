@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/varyoo/bencode"
 	mk "github.com/varyoo/mktorrent"
 	"github.com/varyoo/mktorrent/test"
 )
@@ -47,8 +46,8 @@ func TestSingle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tor := mk.TorrentSingle{}
-	err = bencode.NewDecoder(f).Decode(&tor)
+	tor := mk.Torrent{}
+	err = tor.ReadFrom(f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,8 +77,8 @@ func TestMulti(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tor := mk.TorrentMulti{}
-	err = bencode.NewDecoder(f).Decode(&tor)
+	tor := mk.Torrent{}
+	err = tor.ReadFrom(f)
 	if err != nil {
 		t.Fatal(err)
 	}

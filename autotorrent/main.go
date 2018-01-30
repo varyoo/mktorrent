@@ -96,7 +96,7 @@ func try(flags *flag.FlagSet, args ...string) error {
 		if err := bs.UnmarshalText([]byte(pro.MaxPieceLength)); err != nil {
 			return errors.Wrapf(err, id)
 		}
-		if bs.Bytes() > uint64(mktorrent.MaxPieceDefault) {
+		if bs.Bytes() > uint64(mktorrent.AutoMaxPieceLength) {
 			return fmt.Errorf("%s is too big", id)
 		}
 		ps.PieceLength = mktorrent.MaxPieceLength(int(bs.Bytes()))

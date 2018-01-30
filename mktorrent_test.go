@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/varyoo/bencode"
 	"github.com/varyoo/mktorrent/test"
 )
 
@@ -17,78 +16,65 @@ func init() {
 	}
 }
 
-func torrentEqual(t *testing.T, a, b Torrent) {
-	m := make(map[string]bool)
-	for _, row := range a.AnnounceList {
-		if len(row) != 1 {
-			t.Fatal()
-		}
-		m[row[0]] = true
-	}
-	for _, row := range b.AnnounceList {
-		if len(row) != 1 {
-			t.Fatal()
-		}
-		if !m[row[0]] {
-			t.Error()
-		}
-		delete(m, row[0])
-	}
-	if len(m) != 0 {
-		t.Error()
-	}
-}
+func testEqual(t *testing.T, want, have *Torrent) {
+	t.Helper()
 
-func infoEqual(t *testing.T, a, b Info) {
-	if !reflect.DeepEqual(a, b) {
-		t.Errorf("hex %x", b.Pieces)
-		t.Errorf("Have: %+v\nand: %+v\n", a, b)
+	if !reflect.DeepEqual(want.Info, have.Info) {
+		t.Fatalf("Want: %+v\nBut have: %+v", want.Info, have.Info)
 	}
-}
 
-func singleEqual(t *testing.T, a, b *TorrentSingle) {
-	infoEqual(t, a.InfoSingle.Info, b.InfoSingle.Info)
-	torrentEqual(t, a.Torrent, b.Torrent)
-}
-
-func multiEqual(t *testing.T, a, b *TorrentMulti) {
-	infoEqual(t, a.InfoMulti.Info, b.InfoMulti.Info)
-	torrentEqual(t, a.Torrent, b.Torrent)
-
+	// check files
 	m := make(map[string]File)
-	for _, f := range a.InfoMulti.Files {
+	for _, f := range want.Files {
 		m[filepath.Join(f.Path...)] = f
 	}
-	for _, f := range b.InfoMulti.Files {
+	for _, f := range have.Files {
 		path := filepath.Join(f.Path...)
 		f = m[path]
 		if len(f.Path) == 0 {
-			t.Error()
+			t.Fatal()
 		}
 		delete(m, path)
 	}
 	if len(m) != 0 {
-		t.Error()
+		t.Fatal()
+	}
+
+	// check announce-list
+	ma := make(map[string]bool)
+	for _, row := range want.AnnounceList {
+		if len(row) != 1 {
+			t.Fatal()
+		}
+		ma[row[0]] = true
+	}
+	for _, row := range have.AnnounceList {
+		if len(row) != 1 {
+			t.Fatal()
+		}
+		if !ma[row[0]] {
+			t.Fatal()
+		}
+		delete(ma, row[0])
+	}
+	if len(ma) != 0 {
+		t.Fatal()
 	}
 }
 
 func TestSingle(t *testing.T) {
-	want := &TorrentSingle{
-		Torrent: Torrent{
-			AnnounceList: [][]string{
-				{"http://localhost/announce"},
-				{"udp://localhost:3000"},
-			},
+	want := &Torrent{
+		AnnounceList: [][]string{
+			{"http://localhost/announce"},
+			{"udp://localhost:3000"},
 		},
-		InfoSingle: InfoSingle{
-			Info: Info{
-				Source:      "green",
-				Private:     1,
-				Name:        filepath.Base(test.File),
-				PieceLength: 16384,
-				Pieces:      test.FilePieces,
-			},
-			Length: 0,
+		Info: Info{
+			Source:      "green",
+			Private:     1,
+			Name:        filepath.Base(test.File),
+			PieceLength: 16384,
+			Pieces:      test.FilePieces,
+			TotalLength: 14,
 		},
 	}
 
@@ -117,34 +103,32 @@ func TestSingle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	have := &TorrentSingle{}
-	err = bencode.NewDecoder(b).Decode(have)
+
+	have := &Torrent{}
+	err = have.ReadFrom(b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	singleEqual(t, want, have)
+
+	testEqual(t, want, have)
 }
 
 func TestMulti(t *testing.T) {
-	want := &TorrentMulti{
-		Torrent: Torrent{
-			AnnounceList: [][]string{
-				{"http://localhost/announce"},
-				{"udp://localhost:3000"},
-			},
+	want := &Torrent{
+		AnnounceList: [][]string{
+			{"http://localhost/announce"},
+			{"udp://localhost:3000"},
 		},
-		InfoMulti: InfoMulti{
-			Info: Info{
-				Source:      "green",
-				Private:     0,
-				Name:        filepath.Base(test.Dir),
-				PieceLength: 16384,
-				Pieces:      test.DirPieces,
-			},
+		Info: Info{
+			Source:      "green",
+			Private:     0,
+			Name:        filepath.Base(test.Dir),
+			PieceLength: 16384,
+			Pieces:      test.DirPieces,
 			Files: []File{
-				{Length: 0, Path: []string{"La douceur de l'ennui"}},
-				{0, []string{"Les panthères modernistes"}},
-				{0, []string{"Subdirectory", "Le meurtre moderniste"}},
+				{Length: 18, Path: []string{"La douceur de l'ennui"}},
+				{14, []string{"Les panthères modernistes"}},
+				{15, []string{"Subdirectory", "Le meurtre moderniste"}},
 			},
 		},
 	}
@@ -174,10 +158,12 @@ func TestMulti(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	have := &TorrentMulti{}
-	err = bencode.NewDecoder(b).Decode(have)
+
+	have := &Torrent{}
+	err = have.ReadFrom(b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	multiEqual(t, want, have)
+
+	testEqual(t, want, have)
 }

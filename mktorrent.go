@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	MinPieceDefault int = 16384    // 2^14
-	MaxPieceDefault     = 67108864 // 2^26
+	AutoMinPieceLength int = 16384    // 2^14
+	AutoMaxPieceLength     = 67108864 // 2^26
 )
 
 type (
@@ -23,14 +23,9 @@ type (
 		Source      string `bencode:"source,omitempty"`
 		Private     int    `bencode:"private,omitempty"`
 		Name        string `bencode:"name"`
-	}
-	InfoMulti struct {
-		Info
-		Files []File `bencode:"files"`
-	}
-	InfoSingle struct {
-		Info
-		Length int `bencode:"length"`
+
+		Files       []File `bencode:"files,omitempty"`  // multi-file mode only
+		TotalLength int    `bencode:"length,omitempty"` // single-file mode only
 	}
 	File struct {
 		Length int      `bencode:"length"`
@@ -43,14 +38,8 @@ type (
 		Comment      string     `bencode:"comment,omitempty"`
 		CreatedBy    string     `bencode:"created by,omitempty"`
 		UrlList      string     `bencode:"url-list,omitempty"`
-	}
-	TorrentMulti struct {
-		Torrent
-		InfoMulti `bencode:"info"`
-	}
-	TorrentSingle struct {
-		Torrent
-		InfoSingle `bencode:"info"`
+
+		Info `bencode:"info"`
 	}
 
 	Buffer interface {
@@ -70,55 +59,34 @@ func BoundPieceLength(min, max int) PieceLength {
 	}
 }
 
-var AutoPieceLength = BoundPieceLength(MinPieceDefault, MaxPieceDefault)
+var AutoPieceLength = BoundPieceLength(AutoMinPieceLength, AutoMaxPieceLength)
 
 func MaxPieceLength(max int) PieceLength {
-	return BoundPieceLength(MinPieceDefault, max)
+	return BoundPieceLength(AutoMinPieceLength, max)
 }
 
-type TorrentEditor struct {
-	Info
-	Torrent
-
-	Files      []File
-	PieceCount int
-	Length     int
-}
-
-func (t *TorrentEditor) NewHash(goroutines int, pro Progress) *Digest {
-	return NewHash(t.PieceLength, t.PieceCount, goroutines, pro)
-}
-
-func (t *TorrentEditor) WriteTo(w io.Writer) error {
-	var v interface{}
-	if n := len(t.Files); n > 1 {
-		v = &TorrentMulti{
-			InfoMulti: InfoMulti{
-				Files: t.Files,
-				Info:  t.Info,
-			},
-			Torrent: t.Torrent,
-		}
-	} else if n == 1 {
-		v = &TorrentSingle{
-			InfoSingle: InfoSingle{
-				Info:   t.Info,
-				Length: t.Length,
-			},
-			Torrent: t.Torrent,
-		}
-	} else {
-		panic("0 files torrent")
+func (t *Torrent) WriteTo(w io.Writer) error {
+	if len(t.Files) > 1 {
+		// shouldn't be a problem anyway
+		t.TotalLength = 0
 	}
+	return bencode.NewEncoder(w).Encode(t)
+}
 
-	return bencode.NewEncoder(w).Encode(v)
+func (t *Torrent) ReadFrom(r io.Reader) error {
+	return bencode.NewDecoder(r).Decode(t)
 }
 
 // Filesystem can make torrents from your files or directories.
 type Filesystem struct {
-	TorrentEditor
+	Torrent
 
-	RealPaths []string
+	PieceCount int
+	RealPaths  []string
+}
+
+func (fs *Filesystem) NewHash(goroutines int, pro Progress) *Digest {
+	return NewHash(fs.PieceLength, fs.PieceCount, goroutines, pro)
 }
 
 type Params struct {
@@ -166,9 +134,16 @@ func NewFilesystem(ps Params) (*Filesystem, error) {
 		return nil, err
 	}
 
-	for j := 0; j < len(files); j++ {
-		f := &files[j]
-		f.Path = f.Path[minDepth:]
+	if n := len(files); n > 1 {
+		for j := 0; j < len(files); j++ {
+			f := &files[j]
+			f.Path = f.Path[minDepth:]
+		}
+	} else if n == 1 {
+		// create a single-file mode torrent
+		files = nil
+	} else {
+		panic("0 files torrent")
 	}
 
 	pieceLength := ps.PieceLength(size)
@@ -181,6 +156,8 @@ func NewFilesystem(ps Params) (*Filesystem, error) {
 		PieceLength: pieceLength,
 		Source:      ps.Source,
 		Name:        filepath.Base(ps.Path),
+		Files:       files,
+		TotalLength: size,
 	}
 	if ps.Private {
 		info.Private = 1
@@ -190,21 +167,16 @@ func NewFilesystem(ps Params) (*Filesystem, error) {
 		AnnounceList: make([][]string, 0, len(ps.AnnounceList)),
 		CreationDate: time.Now().Unix(),
 		CreatedBy:    "varyoo",
+		Info:         info,
 	}
 	for _, a := range ps.AnnounceList {
 		torrent.AnnounceList = append(torrent.AnnounceList, []string{a})
 	}
 
-	te := TorrentEditor{
-		Info:       info,
-		Torrent:    torrent,
-		Files:      files,
-		PieceCount: pieceCount,
-		Length:     size,
-	}
 	fs := &Filesystem{
-		TorrentEditor: te,
-		RealPaths:     realPaths,
+		Torrent:    torrent,
+		RealPaths:  realPaths,
+		PieceCount: pieceCount,
 	}
 	return fs, nil
 }
