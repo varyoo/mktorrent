@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -22,6 +23,7 @@ name = "green"
 announce = ["http://localhost/announce"]
 source = "GREEN"
 private = true
+max_piece_length = "16 mb"
 
 [[profile]]
 name = "yellow"
@@ -35,8 +37,7 @@ private = false
 }
 
 func TestSingle(t *testing.T) {
-	os.Args = []string{"autotorrent", "green", test.File}
-	err := try()
+	err := try(flag.NewFlagSet("autotorrent", flag.ExitOnError), "-v", "green", test.File)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,8 +67,8 @@ func TestSingle(t *testing.T) {
 }
 
 func TestMulti(t *testing.T) {
-	os.Args = []string{"autotorrent", "-g", "4", "yellow", test.Dir}
-	err := try()
+	err := try(flag.NewFlagSet("autotorrent", flag.ExitOnError),
+		"-g", "-4", "yellow", test.Dir)
 	if err != nil {
 		t.Fatal(err)
 	}

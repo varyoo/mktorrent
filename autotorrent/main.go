@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/cheggaaa/pb"
 	"github.com/varyoo/mktorrent"
@@ -15,27 +16,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	usage string = `Usage: autotorrent [OPTIONS] PROFILE FILES...
-More help at https://github.com/varyoo/mktorrent
-`
-)
-
-func printHelp() {
-	fmt.Printf("%s\nOPTIONS:\n", usage)
+func usage() {
+	fmt.Fprintf(os.Stderr,
+		"Usage: autotorrent [OPTIONS] <profile> <target directory or filename>...\n\n"+
+			"Options:\n")
 	flag.PrintDefaults()
-}
-
-var (
-	verbose    bool
-	help       bool
-	goroutines int
-)
-
-func init() {
-	flag.BoolVar(&help, "h", false, "show this help screen")
-	flag.BoolVar(&verbose, "v", false, "be verbose")
-	flag.IntVar(&goroutines, "g", 2, "number of Goroutines for calculating hashes")
 }
 
 type (
@@ -47,7 +32,6 @@ type (
 		MaxPieceLength string `toml:"max_piece_length"`
 	}
 	config struct {
-		profile
 		Profiles []profile `toml:"profile"`
 	}
 )
@@ -61,17 +45,21 @@ func (c config) GetProfile(name string) *profile {
 	return nil
 }
 
-func try() error {
-	flag.Parse()
-	if help {
-		printHelp()
-		return nil
-	}
-	paths := flag.Args()
+func try(flags *flag.FlagSet, args ...string) error {
+	var verbose bool
+	var goroutines int
+
+	flags.Usage = usage
+	flags.BoolVar(&verbose, "v", false, "be verbose")
+	flags.IntVar(&goroutines, "g", 2, "number of Goroutines for calculating hashes")
+	flags.Parse(args)
+
+	paths := flags.Args()
 	if len(paths) < 2 {
-		printHelp()
-		return errors.New("not enough arguments")
+		usage()
+		return errors.New("see usage")
 	}
+
 	profileName := paths[0]
 	paths = paths[1:]
 
@@ -96,39 +84,45 @@ func try() error {
 		return errors.New("profile not found")
 	}
 
-	params := mktorrent.Params{
+	ps := mktorrent.Params{
 		AnnounceList: pro.Announce,
 		Source:       pro.Source,
 		Private:      pro.Private,
 	}
 	if pro.MaxPieceLength != "" {
+		id := fmt.Sprintf("%s.max_piece_length", profileName)
+
 		var bs datasize.ByteSize
 		if err := bs.UnmarshalText([]byte(pro.MaxPieceLength)); err != nil {
-			return errors.Wrapf(err, "%s.max_piece_length", profileName)
+			return errors.Wrapf(err, id)
 		}
-		if bs.Bytes() > uint64(mktorrent.MaxPieceLen) {
-			return fmt.Errorf("%s.max_piece_length is too big", profileName)
+		if bs.Bytes() > uint64(mktorrent.MaxPieceDefault) {
+			return fmt.Errorf("%s is too big", id)
 		}
-		params.PieceLength = mktorrent.MaxPieceLength(int(bs.Bytes()))
+		ps.PieceLength = mktorrent.MaxPieceLength(int(bs.Bytes()))
+
 		if verbose {
 			fmt.Printf("Max piece length: %s\n", pro.MaxPieceLength)
 		}
 	} else {
-		params.PieceLength = mktorrent.AutoPieceLength
+		ps.PieceLength = mktorrent.AutoPieceLength
 	}
 
 	if verbose {
-		fmt.Printf("Profile: %s\nAnnounce:", profileName)
-		for _, a := range params.AnnounceList {
-			fmt.Printf(" %s", a)
-		}
-		fmt.Printf("\nSource: %s\nPrivate: %t\n", params.Source, params.Private)
+		fmt.Printf("Profile: %s\n"+
+			"Announce: %s\n"+
+			"Source: %s\n"+
+			"Private: %t\n",
+			profileName,
+			strings.Join(ps.AnnounceList, ", "),
+			ps.Source,
+			ps.Private)
 	}
 
 	for _, path := range paths {
 		if err := func() error {
-			params.Path = path
-			fs, err := mktorrent.NewFilesystem(params)
+			ps.Path = path
+			fs, err := mktorrent.NewFilesystem(ps)
 			if err != nil {
 				return errors.Wrap(err, "pre hashing")
 			}
@@ -155,7 +149,8 @@ func try() error {
 }
 
 func main() {
-	if err := try(); err != nil {
-		log.Println("failure:", err)
+	log.SetFlags(0)
+	if err := try(flag.CommandLine, os.Args[1:]...); err != nil {
+		log.Fatalln("Failure:", err)
 	}
 }

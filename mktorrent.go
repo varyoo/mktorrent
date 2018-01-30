@@ -12,10 +12,8 @@ import (
 )
 
 const (
-	// 2^14: mktorrent minimum
-	MinPieceLen int = 16384
-	// 2^26: mktorrent maximum
-	MaxPieceLen = 67108864
+	MinPieceDefault int = 16384    // 2^14
+	MaxPieceDefault     = 67108864 // 2^26
 )
 
 type (
@@ -72,10 +70,10 @@ func BoundPieceLength(min, max int) PieceLength {
 	}
 }
 
-var AutoPieceLength = BoundPieceLength(MinPieceLen, MaxPieceLen)
+var AutoPieceLength = BoundPieceLength(MinPieceDefault, MaxPieceDefault)
 
 func MaxPieceLength(max int) PieceLength {
-	return BoundPieceLength(MinPieceLen, max)
+	return BoundPieceLength(MinPieceDefault, max)
 }
 
 type TorrentEditor struct {
@@ -227,11 +225,13 @@ func (n *noProgress) Increment() int {
 
 var NoProgress *noProgress = nil
 
-func (f *Filesystem) MakeTorrent(goroutines int, pro Progress) (Buffer, error) {
-	h := f.NewHash(goroutines, pro)
+func (fs Filesystem) MakeTorrent(goroutines int, pro Progress) (Buffer, error) {
+	// Filesystem is passed by value
+
+	h := fs.NewHash(goroutines, pro)
 	defer h.Close()
 
-	err := feed(h, f.RealPaths)
+	err := feed(h, fs.RealPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -241,8 +241,8 @@ func (f *Filesystem) MakeTorrent(goroutines int, pro Progress) (Buffer, error) {
 		return nil, err
 	}
 
-	f.Info.Pieces = string(hashBytes)
-	return f, nil
+	fs.Info.Pieces = string(hashBytes)
+	return &fs, nil
 }
 
 func feed(h *Digest, files []string) error {
