@@ -70,7 +70,7 @@ func TestSingle(t *testing.T) {
 		},
 		Info: Info{
 			Source:      "green",
-			Private:     1,
+			Private:     true,
 			Name:        filepath.Base(test.File),
 			PieceLength: 16384,
 			Pieces:      test.FilePieces,
@@ -121,7 +121,7 @@ func TestMulti(t *testing.T) {
 		},
 		Info: Info{
 			Source:      "green",
-			Private:     0,
+			Private:     false,
 			Name:        filepath.Base(test.Dir),
 			PieceLength: 16384,
 			Pieces:      test.DirPieces,

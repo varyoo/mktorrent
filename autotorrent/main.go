@@ -99,7 +99,7 @@ func try(flags *flag.FlagSet, args ...string) error {
 		if bs.Bytes() > uint64(mktorrent.AutoMaxPieceLength) {
 			return fmt.Errorf("%s is too big", id)
 		}
-		ps.PieceLength = mktorrent.MaxPieceLength(int(bs.Bytes()))
+		ps.PieceLength = mktorrent.MaxPieceLength(int64(bs.Bytes()))
 
 		if verbose {
 			fmt.Printf("Max piece length: %s\n", pro.MaxPieceLength)
@@ -127,7 +127,7 @@ func try(flags *flag.FlagSet, args ...string) error {
 				return errors.Wrap(err, "pre hashing")
 			}
 
-			pro := pb.New(fs.PieceCount).Start()
+			pro := pb.New64(fs.PieceCount).Start()
 			wt, err := fs.MakeTorrent(goroutines, pro)
 			if err != nil {
 				return errors.Wrap(err, "hashing")

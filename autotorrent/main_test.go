@@ -53,10 +53,10 @@ func TestSingle(t *testing.T) {
 	}
 
 	if s := tor.Info.Source; s != "GREEN" {
-		t.Error(s)
+		t.Errorf("Source is %s instead of GREEN", s)
 	}
-	if p := tor.Info.Private; p != 1 {
-		t.Error(p)
+	if !tor.Info.Private {
+		t.Error("Must be private")
 	}
 
 	if len(tor.AnnounceList) != 1 || len(tor.AnnounceList[0]) != 1 ||
@@ -86,8 +86,8 @@ func TestMulti(t *testing.T) {
 	if s := tor.Info.Source; s != "YELLOW" {
 		t.Error(s)
 	}
-	if p := tor.Info.Private; p != 0 {
-		t.Error(p)
+	if tor.Info.Private {
+		t.Error("Must be public")
 	}
 
 	m := map[string]bool{

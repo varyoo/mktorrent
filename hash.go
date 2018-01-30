@@ -25,9 +25,9 @@ func hashRoutine(pieces <-chan piece, wg *sync.WaitGroup, pro Progress) {
 type Digest struct {
 	intra      []byte
 	piece      []byte
-	piecesRead int
-	pieceCount int
-	pieceSize  int
+	piecesRead int64
+	pieceCount int64
+	pieceSize  int64
 	pieces     chan piece
 	wg         *sync.WaitGroup
 	complete   string
@@ -62,7 +62,7 @@ func (d *Digest) Complete() ([]byte, error) {
 	return d.hash, nil
 }
 
-func NewHash(pieceSize, pieceCount, goroutines int, pro Progress) *Digest {
+func NewHash(pieceSize, pieceCount int64, goroutines int, pro Progress) *Digest {
 	if goroutines < 1 {
 		goroutines = 1
 	}

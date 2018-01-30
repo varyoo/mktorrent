@@ -12,23 +12,23 @@ import (
 )
 
 const (
-	AutoMinPieceLength int = 16384    // 2^14
-	AutoMaxPieceLength     = 67108864 // 2^26
+	AutoMinPieceLength int64 = 16384    // 2^14
+	AutoMaxPieceLength       = 67108864 // 2^26
 )
 
 type (
 	Info struct {
-		PieceLength int    `bencode:"piece length"`
+		PieceLength int64  `bencode:"piece length"`
 		Pieces      string `bencode:"pieces"`
 		Source      string `bencode:"source,omitempty"`
-		Private     int    `bencode:"private,omitempty"`
+		Private     bool   `bencode:"private,omitempty"`
 		Name        string `bencode:"name"`
 
 		Files       []File `bencode:"files,omitempty"`  // multi-file mode only
-		TotalLength int    `bencode:"length,omitempty"` // single-file mode only
+		TotalLength int64  `bencode:"length,omitempty"` // single-file mode only
 	}
 	File struct {
-		Length int      `bencode:"length"`
+		Length int64    `bencode:"length"`
 		Path   []string `bencode:"path"`
 	}
 	Torrent struct {
@@ -47,8 +47,10 @@ type (
 	}
 )
 
-func BoundPieceLength(min, max int) PieceLength {
-	return func(length int) (t int) {
+type PieceLength func(length int64) int64
+
+func BoundPieceLength(min, max int64) PieceLength {
+	return func(length int64) (t int64) {
 		t = length / 1000
 		if t < min {
 			t = min
@@ -61,7 +63,7 @@ func BoundPieceLength(min, max int) PieceLength {
 
 var AutoPieceLength = BoundPieceLength(AutoMinPieceLength, AutoMaxPieceLength)
 
-func MaxPieceLength(max int) PieceLength {
+func MaxPieceLength(max int64) PieceLength {
 	return BoundPieceLength(AutoMinPieceLength, max)
 }
 
@@ -81,7 +83,7 @@ func (t *Torrent) ReadFrom(r io.Reader) error {
 type Filesystem struct {
 	Torrent
 
-	PieceCount int
+	PieceCount int64
 	RealPaths  []string
 }
 
@@ -100,7 +102,7 @@ type Params struct {
 func NewFilesystem(ps Params) (*Filesystem, error) {
 	files := make([]File, 0)
 	minDepth := 1
-	size := 0
+	var size int64
 	realPaths := make([]string, 0)
 
 	walker := func(path string, fi os.FileInfo, err error) error {
@@ -118,7 +120,7 @@ func NewFilesystem(ps Params) (*Filesystem, error) {
 			}
 
 			f := File{
-				Length: int(fi.Size()),
+				Length: fi.Size(),
 				Path:   sp,
 			}
 			files = append(files, f)
@@ -158,9 +160,7 @@ func NewFilesystem(ps Params) (*Filesystem, error) {
 		Name:        filepath.Base(ps.Path),
 		Files:       files,
 		TotalLength: size,
-	}
-	if ps.Private {
-		info.Private = 1
+		Private:     ps.Private,
 	}
 
 	torrent := Torrent{
@@ -180,8 +180,6 @@ func NewFilesystem(ps Params) (*Filesystem, error) {
 	}
 	return fs, nil
 }
-
-type PieceLength func(length int) int
 
 type (
 	Progress interface {
