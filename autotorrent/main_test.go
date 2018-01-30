@@ -67,7 +67,7 @@ func TestSingle(t *testing.T) {
 
 func TestMulti(t *testing.T) {
 	err := try(flag.NewFlagSet("autotorrent", flag.ExitOnError),
-		"-g", "-4", "yellow", test.Dir)
+		"-g", "4", "yellow", test.Dir)
 	if err != nil {
 		t.Fatal(err)
 	}

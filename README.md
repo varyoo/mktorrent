@@ -1,7 +1,8 @@
 # mktorrent
 
-Everything you need to make torrent files in pure Go:
-[GoDoc](https://godoc.org/github.com/varyoo/mktorrent)
+[![GoDoc](https://godoc.org/github.com/varyoo/mktorrent?status.svg)](https://godoc.org/github.com/varyoo/mktorrent)
+
+Everything you need to make torrent files in pure Go.
 
 # autotorrent
 
@@ -22,9 +23,10 @@ source = "YELLOW"
 private = false
 ~~~
 
+Create a torrent with profile "green" settings:
+
 ~~~ sh
-$ autotorrent [OPTIONS] PROFILE FILES...
-$ autotorrent -v green file/or/directory
+$ autotorrent green file/or/directory
  473 / 1100 [================>----------------------]  43.00% 49s
 ~~~
 
