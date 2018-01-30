@@ -133,7 +133,7 @@ func try() error {
 				return errors.Wrap(err, "pre hashing")
 			}
 
-			pro := pb.New(fs.GetPieceCount()).Start()
+			pro := pb.New(fs.PieceCount).Start()
 			wt, err := fs.MakeTorrent(goroutines, pro)
 			if err != nil {
 				return errors.Wrap(err, "hashing")
@@ -146,7 +146,7 @@ func try() error {
 				return err
 			}
 
-			return errors.Wrap(wt.Save(w), "can't save torrent")
+			return errors.Wrap(wt.WriteTo(w), "can't save torrent")
 		}(); err != nil {
 			return errors.Wrapf(err, "%s", path)
 		}

@@ -56,41 +56,9 @@ type (
 	}
 
 	Buffer interface {
-		Save(io.Writer) error
-
-		GetLength() int
-		GetPieceLength() int
+		WriteTo(io.Writer) error
 	}
 )
-
-func (i *Info) GetPieceLength() int {
-	return i.PieceLength
-}
-
-func (i *InfoSingle) GetLength() int {
-	return i.Length
-}
-
-func (i *InfoMulti) GetLength() (l int) {
-	for _, f := range i.Files {
-		l += f.Length
-	}
-	return l
-}
-
-func (t *TorrentMulti) Save(w io.Writer) error {
-	return bencode.NewEncoder(w).Encode(t)
-}
-func (t *TorrentMulti) Load(r io.Reader) error {
-	return bencode.NewDecoder(r).Decode(t)
-}
-
-func (t *TorrentSingle) Save(w io.Writer) error {
-	return bencode.NewEncoder(w).Encode(t)
-}
-func (t *TorrentSingle) Load(r io.Reader) error {
-	return bencode.NewDecoder(r).Decode(t)
-}
 
 func BoundPieceLength(min, max int) PieceLength {
 	return func(length int) (t int) {
@@ -110,23 +78,49 @@ func MaxPieceLength(max int) PieceLength {
 	return BoundPieceLength(MinPieceLen, max)
 }
 
-// Filesystem can make torrents from your files or directories.
-type Filesystem struct {
+type TorrentEditor struct {
 	Info
 	Torrent
 
 	Files      []File
-	RealPaths  []string
 	PieceCount int
 	Length     int
 }
 
-func (f *Filesystem) GetLength() int {
-	return f.Length
+func (t *TorrentEditor) NewHash(goroutines int, pro Progress) *Digest {
+	return NewHash(t.PieceLength, t.PieceCount, goroutines, pro)
 }
 
-func (f *Filesystem) GetPieceCount() int {
-	return f.PieceCount
+func (t *TorrentEditor) WriteTo(w io.Writer) error {
+	var v interface{}
+	if n := len(t.Files); n > 1 {
+		v = &TorrentMulti{
+			InfoMulti: InfoMulti{
+				Files: t.Files,
+				Info:  t.Info,
+			},
+			Torrent: t.Torrent,
+		}
+	} else if n == 1 {
+		v = &TorrentSingle{
+			InfoSingle: InfoSingle{
+				Info:   t.Info,
+				Length: t.Length,
+			},
+			Torrent: t.Torrent,
+		}
+	} else {
+		panic("0 files torrent")
+	}
+
+	return bencode.NewEncoder(w).Encode(v)
+}
+
+// Filesystem can make torrents from your files or directories.
+type Filesystem struct {
+	TorrentEditor
+
+	RealPaths []string
 }
 
 type Params struct {
@@ -203,13 +197,16 @@ func NewFilesystem(ps Params) (*Filesystem, error) {
 		torrent.AnnounceList = append(torrent.AnnounceList, []string{a})
 	}
 
-	fs := &Filesystem{
+	te := TorrentEditor{
 		Info:       info,
 		Torrent:    torrent,
 		Files:      files,
-		RealPaths:  realPaths,
 		PieceCount: pieceCount,
 		Length:     size,
+	}
+	fs := &Filesystem{
+		TorrentEditor: te,
+		RealPaths:     realPaths,
 	}
 	return fs, nil
 }
@@ -231,7 +228,7 @@ func (n *noProgress) Increment() int {
 var NoProgress *noProgress = nil
 
 func (f *Filesystem) MakeTorrent(goroutines int, pro Progress) (Buffer, error) {
-	h := NewHash(f.GetPieceLength(), f.PieceCount, goroutines, pro)
+	h := f.NewHash(goroutines, pro)
 	defer h.Close()
 
 	err := feed(h, f.RealPaths)
@@ -245,28 +242,7 @@ func (f *Filesystem) MakeTorrent(goroutines int, pro Progress) (Buffer, error) {
 	}
 
 	f.Info.Pieces = string(hashBytes)
-	var buf Buffer
-	if n := len(f.Files); n > 1 {
-		buf = &TorrentMulti{
-			InfoMulti: InfoMulti{
-				Files: f.Files,
-				Info:  f.Info,
-			},
-			Torrent: f.Torrent,
-		}
-	} else if n == 1 {
-		buf = &TorrentSingle{
-			InfoSingle: InfoSingle{
-				Info:   f.Info,
-				Length: f.Length,
-			},
-			Torrent: f.Torrent,
-		}
-	} else {
-		panic("0 files torrent")
-	}
-
-	return buf, nil
+	return f, nil
 }
 
 func feed(h *Digest, files []string) error {

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/varyoo/bencode"
 	"github.com/varyoo/mktorrent/test"
 )
 
@@ -112,12 +113,12 @@ func TestSingle(t *testing.T) {
 	}
 
 	b := &bytes.Buffer{}
-	err = wt.Save(b)
+	err = wt.WriteTo(b)
 	if err != nil {
 		t.Fatal(err)
 	}
 	have := &TorrentSingle{}
-	err = have.Load(b)
+	err = bencode.NewDecoder(b).Decode(have)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,12 +170,12 @@ func TestMulti(t *testing.T) {
 	}
 
 	b := &bytes.Buffer{}
-	err = wt.Save(b)
+	err = wt.WriteTo(b)
 	if err != nil {
 		t.Fatal(err)
 	}
 	have := &TorrentMulti{}
-	err = have.Load(b)
+	err = bencode.NewDecoder(b).Decode(have)
 	if err != nil {
 		t.Fatal(err)
 	}
