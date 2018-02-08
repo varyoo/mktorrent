@@ -34,9 +34,8 @@ $ autotorrent green file/or/directory
 
 ~~~ sh
 GOPATH=/tmp
-go get -u github.com/varyoo/bencode \
+go get -u github.com/zeebo/bencode \
     github.com/cheggaaa/pb \
-    github.com/varyoo/mktorrent \
     github.com/BurntSushi/toml \
     github.com/c2h5oh/datasize \
     github.com/pkg/errors \

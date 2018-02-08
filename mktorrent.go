@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/varyoo/bencode" // waiting for zeebo to merge bugfix
+	"github.com/zeebo/bencode"
 )
 
 const (
